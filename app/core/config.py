@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(default="", description="OpenAI API Key，供 clarify/parse/sql_generate 等节点使用")
     OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI 模型名")
     OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，可选")
+    LLM_MAX_RETRIES: int = Field(default=3, description="LLM HTTP 层重试次数（网络错误、限流等）")
+    LLM_RETRY_ATTEMPTS: int = Field(default=3, description="LLM structured output 应用层重试次数")
+    AGENT_RECURSION_LIMIT: int = Field(default=25, description="LangGraph 单次调用最大节点执行次数")
+    AGENT_MAX_MESSAGE_PAIRS: int = Field(default=5, description="Prompt 中保留的最大消息轮数")
 
     # Milvus
     MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")

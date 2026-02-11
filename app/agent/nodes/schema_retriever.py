@@ -1,7 +1,10 @@
+import asyncio
+import time
 from typing import Any, Dict
 
 from app.agent.states import NL2SQLState
 from app.core.config import settings
+from app.core.logger import logger
 from app.core.retrieval_client import retrieval_client
 from app.schemas.agent import AgentErrorCode
 from app.vars.vars import HUMAN_TYPE
@@ -42,7 +45,13 @@ class SchemaRetriever:
         return [hit["entity"][schema_field] for hit in results[0]]
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
+        logger.info(
+            "schema_retriever.start",
+            schema_retry_count=state.schema_retry_count,
+        )
+
         if state.schema_retry_count >= settings.AGENT_MAX_SCHEMA_RETRIES:
+            logger.warning("schema_retriever.retry_limit_reached")
             return {
                 "is_success": False,
                 "error_code": AgentErrorCode.SCHEMA_RETRY_LIMIT,
@@ -51,6 +60,7 @@ class SchemaRetriever:
 
         query = self._build_retrieval_query(state)
         if not query:
+            logger.warning("schema_retriever.empty_query")
             return {
                 "is_success": False,
                 "error_code": AgentErrorCode.EMPTY_QUERY,
@@ -58,8 +68,12 @@ class SchemaRetriever:
             }
 
         try:
-            schemas = self._search(query)
+            start = time.monotonic()
+            schemas = await asyncio.to_thread(self._search, query)
+            elapsed_ms = (time.monotonic() - start) * 1000
+            logger.info("schema_retriever.search_completed", elapsed_ms=round(elapsed_ms, 1))
         except Exception as e:
+            logger.error("schema_retriever.search_failed", error=str(e))
             return {
                 "is_success": False,
                 "error_code": AgentErrorCode.RETRIEVAL_ERROR,
@@ -67,12 +81,14 @@ class SchemaRetriever:
             }
 
         if not schemas:
+            logger.warning("schema_retriever.no_results")
             return {
                 "is_success": False,
                 "error_code": AgentErrorCode.NO_SCHEMA_RESULTS,
                 "error_message": AgentErrorCode.NO_SCHEMA_RESULTS.message,
             }
 
+        logger.info("schema_retriever.completed", schema_count=len(schemas))
         return {
             "schemas": schemas,
             "schema_retry_count": state.schema_retry_count + 1,

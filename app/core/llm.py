@@ -7,4 +7,5 @@ llm = ChatOpenAI(
     api_key=settings.OPENAI_API_KEY,
     base_url=settings.OPENAI_BASE_URL,
     timeout=60,
+    max_retries=settings.LLM_MAX_RETRIES,
 )

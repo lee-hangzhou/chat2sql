@@ -5,8 +5,9 @@ from sqlglot import exp
 from tortoise.exceptions import OperationalError
 
 from app.agent.states import NL2SQLState
-from app.core.database import business_db
 from app.core.config import settings
+from app.core.database import business_db
+from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode, ExecuteExplainResult, Explain, PerformanceResult, SyntaxResult
 
 
@@ -159,6 +160,7 @@ class SQLValidator:
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         if not state.sql_result or not state.sql_result.sql:
+            logger.warning("sql_validator.no_sql")
             return {
                 "is_success": False,
                 "error_code": AgentErrorCode.NO_SQL,
@@ -166,10 +168,12 @@ class SQLValidator:
             }
 
         sql = state.sql_result.sql
+        logger.info("sql_validator.start", retry_count=state.retry_count)
 
         # 1. 语法校验
         syntax_result = self._parse_syntax(sql)
         if not syntax_result.is_ok:
+            logger.warning("sql_validator.syntax_failed", error=syntax_result.error)
             return self._build_fail_result(
                 state, syntax_result, None, None, syntax_result.error,
             )
@@ -177,6 +181,7 @@ class SQLValidator:
         # 2. 执行 EXPLAIN
         explain_result = await self._execute_explain(sql)
         if explain_result.error:
+            logger.warning("sql_validator.explain_failed", error=explain_result.error)
             return self._build_fail_result(
                 state, syntax_result, explain_result.error, None, explain_result.error,
             )
@@ -184,11 +189,16 @@ class SQLValidator:
         # 3. 性能校验
         performance_result = self._parse_explain(explain_result)
         if not performance_result.is_ok:
+            logger.warning(
+                "sql_validator.performance_issues",
+                issues=performance_result.issues,
+            )
             return self._build_fail_result(
                 state, syntax_result, None, performance_result,
                 "; ".join(performance_result.issues),
             )
 
+        logger.info("sql_validator.passed")
         return {
             "syntax_result": syntax_result,
             "explain_error": None,

@@ -15,6 +15,7 @@ class NL2SQLState(BaseModel):
     """
     NL2SQL全局状态，记录用户输入、意图解析、SQL生成及执行情况
     """
+    user_id: Optional[str] = Field(default=None, description="用户标识，由调用方注入，用于审计")
     schemas: Annotated[List[str], merge_schemas] = Field(default_factory=list, description="检索的表结构列表")
     intent_parse_result: Optional[IntentParseResult] = Field(default=None, description="格式化的意图解析")
     messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list, description="对话消息记录")
