@@ -9,7 +9,6 @@ class RetrievalClient(MilvusClient, Singleton):
         self.sentence_transformer = SentenceTransformer(
             settings.EMBEDDING_MODEL,
         )
-        self.a=1
 
 
 

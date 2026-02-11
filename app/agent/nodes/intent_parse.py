@@ -27,6 +27,8 @@ class IntentParse(Singleton):
         params = {
             "messages": state.messages,
             "schemas": schemas,
+            "ir_ast_tag": "",
+            "existing_ir_ast": "",
         }
         if existing_ir_ast:
             params["ir_ast_tag"] = IR_AST_TAG

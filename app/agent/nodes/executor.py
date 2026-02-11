@@ -1,7 +1,7 @@
 from typing import Any, Dict, List
 
 from app.agent.states import NL2SQLState
-from app.core import Singleton, logger
+from app.core import Singleton
 from app.core.database import business_db
 
 
@@ -18,5 +18,4 @@ class Executor(Singleton):
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         result = await self._execute_sql(state.sql_result.sql)
-        logger.info()
         return {"execute_result": result}
