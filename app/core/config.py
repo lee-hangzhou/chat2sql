@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     # Business database for NL2SQL query validation (optional)
     BUSINESS_DATABASE_URL: Optional[str] = Field(default="mysql://root:123456@localhost:3306/ai_translator", description="业务数据库连接地址，供 NL2SQL 查询验证使用")
     EXPLAIN_MAX_ROWS: int = Field(default=10000, description="EXPLAIN 预估扫描行数阈值，超过则标记为性能问题")
+    EXECUTOR_MAX_ROWS: int = Field(default=1000, description="执行结果最大返回行数，超出部分截断")
     AGENT_MAX_RETRIES: int = Field(default=3, description="SQL 校验失败最大重试次数")
+    AGENT_MAX_SCHEMA_RETRIES: int = Field(default=3, description="Schema 检索最大次数（含首次）")
+    AGENT_MAX_FOLLOW_UPS: int = Field(default=3, description="最大追问次数")
 
     # Checkpointer
     CHECKPOINTER_TYPE: CheckpointerType = Field(default=CheckpointerType.MEMORY, description="checkpointer 后端类型")
@@ -62,6 +65,8 @@ class Settings(BaseSettings):
 
     # Milvus
     MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")
+    MILVUS_COLLECTION_NAME: str = Field(default="table_schemas", description="Milvus 集合名称")
+    MILVUS_SCHEMA_FIELD: str = Field(default="table_schema", description="Milvus 中存储表结构的标量字段名")
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
 
     @property

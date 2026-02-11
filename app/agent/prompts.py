@@ -23,9 +23,9 @@ class ChatPrompt:
         return template.format_messages(**kwargs)
 
     @classmethod
-    def generate_prompt(cls, schemas: str, ir_ast: str) -> List[BaseMessage]:
+    def generate_prompt(cls, **kwargs) -> List[BaseMessage]:
         template = ChatPromptTemplate.from_messages([
             (SYSTEM_TYPE, GENERATE_SQL_SYSTEM_PROMPT),
             (HUMAN_TYPE, GENERATE_SQL_HUMAN_PROMPT)
         ])
-        return template.format_messages(schemas=schemas, ir_ast=ir_ast)
+        return template.format_messages(**kwargs)

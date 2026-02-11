@@ -1,7 +1,9 @@
-from typing import Dict
+from typing import Any, Dict
 
 from app.agent.states import NL2SQLState
+from app.core.config import settings
 from app.core.retrieval_client import retrieval_client
+from app.schemas.agent import AgentErrorCode
 from app.vars.vars import HUMAN_TYPE
 
 
@@ -11,11 +13,7 @@ class SchemaRetriever:
 
     @staticmethod
     def _build_retrieval_query(state: NL2SQLState) -> str:
-        """
-        从对话历史中提取用户消息构建检索查询
-        - 只保留 HumanMessage
-        - 按时间顺序拼接，让向量模型理解查询演进
-        """
+        """从对话历史中提取用户消息构建检索查询"""
         if not state.messages:
             return ""
 
@@ -23,36 +21,59 @@ class SchemaRetriever:
             msg.content for msg in state.messages
             if msg.type == HUMAN_TYPE
         ]
-
         return "\n".join(user_messages)
 
-    def _search(self, state: NL2SQLState) -> Dict[str, any]:
-        """
-        根据用户输入检索相似度最高的5张表
-        """
-        message = self._build_retrieval_query(state)
-        embedding = self.retriever.sentence_transformer.encode(message)
+    def _search(self, query: str) -> list[str]:
+        embedding = self.retriever.sentence_transformer.encode(query)
         search_params = {
             "metric_type": "COSINE",
-            "params": {
-                "ef": 64
-            }
+            "params": {"ef": 64},
         }
+        schema_field = settings.MILVUS_SCHEMA_FIELD
         results = self.retriever.search(
-            "collection_name",  # todo 集合名在创建时定义
+            settings.MILVUS_COLLECTION_NAME,
             data=[embedding],
             limit=5,
             search_params=search_params,
-            output_fields=["table_schema"]  # todo 标量字段，应在创建集合时定义
+            output_fields=[schema_field],
         )
-        if len(results) == 0:
-            raise  # todo 是否要加这个判断
+        if not results or not results[0]:
+            return []
+        return [hit["entity"][schema_field] for hit in results[0]]
 
-        schemas = list()
-        for hit in results[0]:
-            schemas.append(hit["entity"]["table_schema"])
+    async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
+        if state.schema_retry_count >= settings.AGENT_MAX_SCHEMA_RETRIES:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.SCHEMA_RETRY_LIMIT,
+                "error_message": AgentErrorCode.SCHEMA_RETRY_LIMIT.message,
+            }
 
-        return {"schemas": schemas}
+        query = self._build_retrieval_query(state)
+        if not query:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.EMPTY_QUERY,
+                "error_message": AgentErrorCode.EMPTY_QUERY.message,
+            }
 
-    def __call__(self, state: NL2SQLState) -> Dict[str, any]:
-        return self._search(state)
+        try:
+            schemas = self._search(query)
+        except Exception as e:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.RETRIEVAL_ERROR,
+                "error_message": str(e),
+            }
+
+        if not schemas:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.NO_SCHEMA_RESULTS,
+                "error_message": AgentErrorCode.NO_SCHEMA_RESULTS.message,
+            }
+
+        return {
+            "schemas": schemas,
+            "schema_retry_count": state.schema_retry_count + 1,
+        }

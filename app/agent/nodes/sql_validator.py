@@ -7,10 +7,11 @@ from tortoise.exceptions import OperationalError
 from app.agent.states import NL2SQLState
 from app.core.database import business_db
 from app.core.config import settings
-from app.schemas.agent import ExecuteExplainResult, Explain, PerformanceResult, SyntaxResult
+from app.schemas.agent import AgentErrorCode, ExecuteExplainResult, Explain, PerformanceResult, SyntaxResult
 
 
 class SQLValidator:
+
     # SQL 层面的错误码：可通过重新生成 SQL 来修复
     _SQL_ERROR_CODES = frozenset({
         1054,  # Unknown column
@@ -54,7 +55,7 @@ class SQLValidator:
         if not isinstance(ast, exp.Select):
             return SyntaxResult(
                 is_ok=False,
-                error="Only SELECT statements are allowed"  # todo 不要字面量
+                error=AgentErrorCode.ONLY_SELECT.message,
             )
 
         return SyntaxResult(
@@ -88,7 +89,7 @@ class SQLValidator:
                 # SQL 层面错误，记录后交由上游节点重新生成 SQL
                 return ExecuteExplainResult(error=str(e))
             # 系统层面错误（权限、连接、配置等），向上抛出
-            raise  # ToDo，日志要处理一下
+            raise
 
     def _parse_explain(self, explain_result: ExecuteExplainResult) -> PerformanceResult:
         """分析 EXPLAIN 执行计划，校验是否存在性能问题"""
@@ -152,10 +153,18 @@ class SQLValidator:
         }
         if new_retry_count >= settings.AGENT_MAX_RETRIES:
             result["is_success"] = False
+            result["error_code"] = AgentErrorCode.VALIDATION_RETRY_LIMIT
             result["error_message"] = error_message
         return result
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
+        if not state.sql_result or not state.sql_result.sql:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.NO_SQL,
+                "error_message": AgentErrorCode.NO_SQL.message,
+            }
+
         sql = state.sql_result.sql
 
         # 1. 语法校验

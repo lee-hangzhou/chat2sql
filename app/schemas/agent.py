@@ -6,8 +6,30 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.ast import QueryElement
 
 
-class DatabaseType(Enum):
-    MySQL = "mysql"
+class DatabaseType(str, Enum):
+    MYSQL = "mysql"
+
+
+class AgentErrorCode(str, Enum):
+    """Agent 错误码，每个成员携带 code（用于调用方逻辑判断）和 message（默认描述）"""
+
+    def __new__(cls, code: str, message: str):
+        obj = str.__new__(cls, code)
+        obj._value_ = code
+        obj.message = message
+        return obj
+
+    EMPTY_QUERY = ("empty_query", "无法从对话历史中提取有效的用户查询")
+    NO_SCHEMA_RESULTS = ("no_schema_results", "未检索到匹配的表结构")
+    SCHEMA_RETRY_LIMIT = ("schema_retry_limit", "Schema 检索次数已达上限")
+    FOLLOW_UP_LIMIT = ("follow_up_limit", "追问次数已达上限")
+    NO_IR_AST = ("no_ir_ast", "意图解析未产出中间表示，无法生成 SQL")
+    NO_SQL = ("no_sql", "SQL 结果为空")
+    ONLY_SELECT = ("only_select", "仅允许 SELECT 语句")
+    LLM_ERROR = ("llm_error", "LLM 调用失败")
+    RETRIEVAL_ERROR = ("retrieval_error", "向量检索失败")
+    EXECUTION_ERROR = ("execution_error", "SQL 执行失败")
+    VALIDATION_RETRY_LIMIT = ("validation_retry_limit", "SQL 校验重试次数已达上限")
 
 
 class IntentParseResult(BaseModel):

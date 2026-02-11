@@ -23,18 +23,47 @@ SQL_VALIDATOR = "sql_validator"
 EXECUTOR = "executor"
 
 
+def route_after_schema_retriever(state: NL2SQLState) -> str:
+    """Schema 检索后的路由：失败则终止"""
+    if state.is_success is False:
+        return END
+    return INTENT_PARSE
+
+
 def route_after_intent_parse(state: NL2SQLState) -> str:
-    """意图解析后的路由：追问 / 重新检索 / 生成 SQL"""
+    """意图解析后的路由：失败终止 / 重新检索 / 追问 / 生成 SQL
+
+    优先级：schema_retry > follow_up > sql_generator
+    """
+    if state.is_success is False:
+        return END
+
     result = state.intent_parse_result
-    if result.need_follow_up:
-        return FOLLOW_UP
     if result.need_retry_retrieve:
         return SCHEMA_RETRIEVER
+    if result.need_follow_up:
+        return FOLLOW_UP
     return SQL_GENERATOR
+
+
+def route_after_follow_up(state: NL2SQLState) -> str:
+    """追问后的路由：超出上限则终止"""
+    if state.is_success is False:
+        return END
+    return INTENT_PARSE
+
+
+def route_after_sql_generator(state: NL2SQLState) -> str:
+    """SQL 生成后的路由：失败则终止"""
+    if state.is_success is False:
+        return END
+    return SQL_VALIDATOR
 
 
 def route_after_validate(state: NL2SQLState) -> str:
     """SQL 校验后的路由：超过重试上限终止 / 语法错误 / 表字段错误 / 性能问题 / 通过"""
+    if state.is_success is False:
+        return END
     if state.retry_count >= settings.AGENT_MAX_RETRIES:
         return END
     if state.syntax_result and not state.syntax_result.is_ok:
@@ -79,10 +108,10 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node(EXECUTOR, Executor())
 
     graph.add_edge(START, SCHEMA_RETRIEVER)
-    graph.add_edge(SCHEMA_RETRIEVER, INTENT_PARSE)
+    graph.add_conditional_edges(SCHEMA_RETRIEVER, route_after_schema_retriever)
     graph.add_conditional_edges(INTENT_PARSE, route_after_intent_parse)
-    graph.add_edge(FOLLOW_UP, INTENT_PARSE)
-    graph.add_edge(SQL_GENERATOR, SQL_VALIDATOR)
+    graph.add_conditional_edges(FOLLOW_UP, route_after_follow_up)
+    graph.add_conditional_edges(SQL_GENERATOR, route_after_sql_generator)
     graph.add_conditional_edges(SQL_VALIDATOR, route_after_validate)
     graph.add_edge(EXECUTOR, END)
 

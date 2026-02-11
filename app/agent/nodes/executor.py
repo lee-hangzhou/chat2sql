@@ -1,7 +1,9 @@
 from typing import Any, Dict, List
 
 from app.agent.states import NL2SQLState
+from app.core.config import settings
 from app.core.database import business_db
+from app.schemas.agent import AgentErrorCode
 
 
 class Executor:
@@ -16,5 +18,24 @@ class Executor:
         return [dict(row) for row in rows]
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
-        result = await self._execute_sql(state.sql_result.sql)
+        if not state.sql_result or not state.sql_result.sql:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.NO_SQL,
+                "error_message": AgentErrorCode.NO_SQL.message,
+            }
+
+        try:
+            result = await self._execute_sql(state.sql_result.sql)
+        except Exception as e:
+            return {
+                "is_success": False,
+                "error_code": AgentErrorCode.EXECUTION_ERROR,
+                "error_message": str(e),
+            }
+
+        # 截断过大结果集，防止内存溢出
+        if len(result) > settings.EXECUTOR_MAX_ROWS:
+            result = result[:settings.EXECUTOR_MAX_ROWS]
+
         return {"execute_result": result, "is_success": True}

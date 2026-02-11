@@ -4,7 +4,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
 
-from app.schemas.agent import IntentParseResult, PerformanceResult, SQLResult, SyntaxResult
+from app.schemas.agent import AgentErrorCode, IntentParseResult, PerformanceResult, SQLResult, SyntaxResult
 
 
 def merge_schemas(existing: List[str], new: List[str]) -> List[str]:
@@ -20,8 +20,10 @@ class NL2SQLState(BaseModel):
     messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list, description="对话消息记录")
     sql_result: Optional[SQLResult] = Field(default=None, description="生成的SQL语句")
 
-    # 重试计数（由 sql_validator 节点在校验失败时递增）
+    # 循环计数
     retry_count: int = Field(default=0, description="SQL 校验失败重试次数")
+    schema_retry_count: int = Field(default=0, description="Schema 检索次数")
+    follow_up_count: int = Field(default=0, description="追问次数")
 
     # SQL 校验结果（由 sql_validator 节点写入）
     syntax_result: Optional[SyntaxResult] = Field(default=None, description="SQL语法校验结果")
@@ -33,4 +35,5 @@ class NL2SQLState(BaseModel):
 
     # 终态（由 sql_validator / executor 写入）
     is_success: Optional[bool] = Field(default=None, description="最终执行是否成功")
+    error_code: Optional[AgentErrorCode] = Field(default=None, description="失败时的错误码")
     error_message: Optional[str] = Field(default=None, description="失败时的错误描述")

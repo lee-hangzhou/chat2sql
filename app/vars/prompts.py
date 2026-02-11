@@ -22,6 +22,23 @@ INTENT_RECOGNITION_SYSTEM_PROMPT = """
 - 用户提到的实体在当前表中找不到
 - 查询需要关联表，但当前只有主表
 - 表结构明显不完整
+
+## 示例
+用户："查询最近7天各客户的订单总金额"
+可用表结构包含 orders 表（含 customer_id, total_amount, created_at 字段）
+
+输出中间表示：
+```json
+{{
+  "select": [
+    {{"name": "customer_id", "table_alias": "o"}},
+    {{"name": "total_amount", "agg": "SUM", "alias": "total"}}
+  ],
+  "from_table": {{"name": "orders", "alias": "o"}},
+  "where": {{"op": ">=", "operands": ["o.created_at", "DATE_SUB(CURDATE(), INTERVAL 7 DAY)"]}},
+  "group_by": ["o.customer_id"]
+}}
+```
 """
 
 INTENT_RECOGNITION_HUMAN_PROMPT = """
@@ -31,26 +48,53 @@ INTENT_RECOGNITION_HUMAN_PROMPT = """
 {ir_ast_tag}
 {existing_ir_ast}
 
+{performance_feedback_tag}
+{performance_feedback}
+
 请输出结果
 """
 
 IR_AST_TAG = """## 已有中间表示"""
 
+PERFORMANCE_FEEDBACK_TAG = """## 性能反馈
+上一次生成的 SQL 存在以下性能问题，请调整中间表示以优化："""
+
 
 GENERATE_SQL_SYSTEM_PROMPT = """
-你是 SQL 生成器
+你是 MySQL SQL 生成器
 
 ## 任务
-根据提供的中间表示（QueryElement JSON）和表结构（DDL），生成对应的 SELECT SQL
+根据提供的中间表示（QueryElement JSON）和表结构（DDL），生成对应的 MySQL SELECT 语句
 
 ## 规则
-- 只生成 SELECT 语句
-- 只使用提供的 DDL 中的表名和字段名
-- 只输出 SQL，不要任何解释、注释或 markdown 标记
-- 如果中间表示中包含聚合函数，正确使用 GROUP BY
-- 如果中间表示中包含 JOIN，根据 DDL 中的字段关系生成正确的关联条件
-- SQL 以分号结尾
+- **仅 SELECT**：只生成 SELECT 语句，禁止 INSERT / UPDATE / DELETE / DROP / ALTER / TRUNCATE 等任何写操作
+- **仅用已知对象**：只使用提供的 DDL 中的表名和字段名
+- **纯 SQL 输出**：只输出 SQL，不要任何解释、注释或 markdown 标记
+- **聚合**：如果中间表示中包含聚合函数，正确使用 GROUP BY
+- **关联**：如果中间表示中包含 JOIN，根据 DDL 中的字段关系生成正确的关联条件
+- **分号结尾**：SQL 以分号结尾
+- **校验修正**：如果提供了校验反馈，必须针对指出的问题修正 SQL
+
+## 示例
+中间表示：
+```json
+{{
+  "select": [
+    {{"name": "customer_id", "table_alias": "o"}},
+    {{"name": "total_amount", "agg": "SUM", "alias": "total"}}
+  ],
+  "from_table": {{"name": "orders", "alias": "o"}},
+  "where": {{"op": ">=", "operands": ["o.created_at", "DATE_SUB(CURDATE(), INTERVAL 7 DAY)"]}},
+  "group_by": ["o.customer_id"]
+}}
+```
+
+生成 SQL：
+SELECT o.customer_id, SUM(o.total_amount) AS total FROM orders o WHERE o.created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY o.customer_id;
 """
+
+VALIDATION_FEEDBACK_TAG = """## 校验反馈
+上一次生成的 SQL 校验失败，原因如下，请修正后重新生成："""
 
 GENERATE_SQL_HUMAN_PROMPT = """
 ## 表结构
@@ -58,6 +102,9 @@ GENERATE_SQL_HUMAN_PROMPT = """
 
 ## 中间表示
 {ir_ast}
+
+{validation_feedback_tag}
+{validation_feedback}
 
 请生成 SQL
 """
