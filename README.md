@@ -47,7 +47,7 @@ chat2sql/
 **1. 克隆项目并初始化**
 
 ```bash
-git clone <repo-url> && cd chat2sql
+git clone https://github.com/lee-hangzhou/chat2sql && cd chat2sql
 
 # 创建 Python 虚拟环境
 python -m venv venv
