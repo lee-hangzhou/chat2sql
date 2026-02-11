@@ -7,7 +7,7 @@ COPY web/ ./
 RUN npm run build
 
 # Stage 2: Install Python dependencies
-FROM python:3.11-slim AS backend-builder
+FROM python:3.12-slim AS backend-builder
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -16,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 3: Production image
-FROM python:3.11-slim
+FROM python:3.12-slim
 WORKDIR /app
 
 RUN groupadd -r appuser && useradd -r -g appuser appuser

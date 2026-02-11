@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = Field(default="json")
 
     # NL2SQL Agent
-    OPENAI_API_KEY: str = Field(default="", description="OpenAI API Key，供 clarify/parse/sql_generate 等节点使用")
+    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key，使用本地模型时无需配置")
     OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI 模型名")
     OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，可选")
     LLM_MAX_RETRIES: int = Field(default=3, description="LLM HTTP 层重试次数（网络错误、限流等）")

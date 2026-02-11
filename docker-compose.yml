@@ -1,38 +1,42 @@
-version: '3.8'
-
 services:
+
+  # Application
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: smart_chat_app
+    container_name: chat2sql-app
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - ENV=prod
       - DEBUG=false
-
-      - DATABASE_URL=mysql://root:password@mysql:3306/smart_chat
-      # Business database for NL2SQL query validation (optional)
-      # - BUSINESS_DATABASE_URL=mysql://root:password@business-db-host:3306/business_db
-
+      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-chat2sql}@mysql:3306/chat2sql
       - REDIS_URL=redis://redis:6379/0
+      - MILVUS_URI=http://milvus-standalone:19530
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-secret-key}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
+      milvus-standalone:
+        condition: service_healthy
     restart: unless-stopped
     networks:
-      - smart_chat_network
+      - chat2sql-net
+
+  # MySQL
 
   mysql:
     image: mysql:8.0
-    container_name: smart_chat_mysql
+    container_name: chat2sql-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: smart_chat
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-chat2sql}
+      MYSQL_DATABASE: chat2sql
       MYSQL_CHARACTER_SET_SERVER: utf8mb4
       MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
     ports:
@@ -46,11 +50,13 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - smart_chat_network
+      - chat2sql-net
+
+  # Redis
 
   redis:
     image: redis:7-alpine
-    container_name: smart_chat_redis
+    container_name: chat2sql-redis
     ports:
       - "6379:6379"
     volumes:
@@ -62,14 +68,88 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - smart_chat_network
+      - chat2sql-net
 
+  # Milvus Dependencies
 
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    container_name: chat2sql-etcd
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    volumes:
+      - etcd_data:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - chat2sql-net
+
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: chat2sql-minio
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9001:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - chat2sql-net
+
+  # Milvus
+
+  milvus-standalone:
+    image: milvusdb/milvus:v2.5.4
+    container_name: chat2sql-milvus
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      start_period: 90s
+      retries: 3
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chat2sql-net
 
 volumes:
   mysql_data:
   redis_data:
+  etcd_data:
+  minio_data:
+  milvus_data:
 
 networks:
-  smart_chat_network:
+  chat2sql-net:
     driver: bridge
