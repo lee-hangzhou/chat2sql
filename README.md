@@ -1,0 +1,63 @@
+# chat2sql
+
+## Tech Stack
+
+- FastAPI
+- Tortoise ORM
+- MySQL
+- Redis
+- JWT Authentication
+
+## Project Structure
+
+```
+chat2sql/
+├── app/
+│   ├── main.py
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   ├── logger.py
+│   │   ├── security.py
+│   │   └── lifespan.py
+│   ├── api/
+│   │   └── v1/
+│   │       ├── router.py
+│   │       └── endpoints/
+│   ├── models/
+│   ├── schemas/
+│   ├── repositories/
+│   ├── services/
+│   ├── middleware/
+│   ├── exceptions/
+│   └── utils/
+├── tests/
+├── Dockerfile
+├── docker-compose.yml
+└── requirements.txt
+```
+
+## Quick Start
+
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+make dev
+```
+
+## API Documentation
+
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+## Docker Deployment
+
+```bash
+docker-compose up -d
+```
+
+## License
+
+MIT

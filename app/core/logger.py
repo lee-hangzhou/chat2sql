@@ -1,0 +1,128 @@
+import logging
+import sys
+from typing import Any, List, Optional
+
+import structlog
+from structlog.contextvars import bind_contextvars, clear_contextvars, unbind_contextvars
+from structlog.types import EventDict, Processor, WrappedLogger
+
+from app.core.config import settings
+
+
+def _add_caller_info(
+    _logger: WrappedLogger,
+    _method_name: str,
+    event_dict: EventDict,
+) -> EventDict:
+    """Add caller information (module, function, line) to log record."""
+    record = event_dict.get("_record")
+    if record is not None and isinstance(record, logging.LogRecord):
+        event_dict["module"] = record.module
+        event_dict["function"] = record.funcName
+        event_dict["line"] = record.lineno
+    return event_dict
+
+
+def _drop_color_message_key(
+    _logger: WrappedLogger,
+    _method_name: str,
+    event_dict: EventDict,
+) -> EventDict:
+    """Remove color_message key added by uvicorn."""
+    event_dict.pop("color_message", None)
+    return event_dict
+
+
+def get_shared_processors() -> List[Processor]:
+    return [
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        _drop_color_message_key,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.UnicodeDecoder(),
+    ]
+
+
+def configure_stdlib_logging(log_level: str, json_logs: bool) -> None:
+    shared_processors = get_shared_processors()
+
+    if json_logs:
+        renderer: Processor = structlog.processors.JSONRenderer(ensure_ascii=False)
+    else:
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
+    formatter = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            _add_caller_info,
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            renderer,
+        ],
+    )
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(log_level.upper())
+
+    # Configure specific loggers
+    for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
+        logging.getLogger(logger_name).handlers.clear()
+        logging.getLogger(logger_name).propagate = True
+
+    # Quiet noisy loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+def configure_structlog() -> None:
+    # Use shared processors + wrap_for_formatter to let stdlib do final rendering
+    # This avoids double JSON encoding
+    processors: List[Processor] = [
+        *get_shared_processors(),
+        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+    ]
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+
+def setup_logging() -> None:
+    log_level = getattr(settings, "LOG_LEVEL", "INFO")
+    log_format = getattr(settings, "LOG_FORMAT", "json")
+    json_logs = log_format.lower() == "json"
+
+    configure_stdlib_logging(log_level, json_logs)
+    configure_structlog()
+
+
+def bind_context(**kwargs: Any) -> None:
+    bind_contextvars(**kwargs)
+
+
+def unbind_context(*keys: str) -> None:
+    unbind_contextvars(*keys)
+
+
+def clear_context() -> None:
+    clear_contextvars()
+
+
+def get_logger(name: Optional[str] = None) -> structlog.stdlib.BoundLogger:
+    return structlog.get_logger(name)
+
+
+setup_logging()
+
+logger: structlog.stdlib.BoundLogger = get_logger("chat2sql")

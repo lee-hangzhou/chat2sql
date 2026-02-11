@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart_chat_app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=prod
+      - DEBUG=false
+
+      - DATABASE_URL=mysql://root:password@mysql:3306/smart_chat
+      # Business database for NL2SQL query validation (optional)
+      # - BUSINESS_DATABASE_URL=mysql://root:password@business-db-host:3306/business_db
+
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-secret-key}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - smart_chat_network
+
+  mysql:
+    image: mysql:8.0
+    container_name: smart_chat_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: smart_chat
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - smart_chat_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: smart_chat_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - smart_chat_network
+
+
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  smart_chat_network:
+    driver: bridge
