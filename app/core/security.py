@@ -9,6 +9,13 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+ACTIVE_TOKEN_PREFIX = "active_token:"
+
+
+def active_token_key(token: str) -> str:
+    """生成 token 白名单的 Redis key"""
+    return f"{ACTIVE_TOKEN_PREFIX}{token}"
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     result = pwd_context.verify(plain_password, hashed_password)

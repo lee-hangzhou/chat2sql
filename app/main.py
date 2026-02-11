@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.lifespan import lifespan
 from app.exceptions.handlers import register_exception_handlers
 from app.middleware import (
+    JWTAuthMiddleware,
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
     TracingMiddleware,
@@ -27,6 +28,20 @@ def create_app() -> FastAPI:
     application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(TracingMiddleware)
     application.add_middleware(RequestLoggingMiddleware)
+    application.add_middleware(
+        JWTAuthMiddleware,
+        whitelist=[
+            f"{settings.API_V1_PREFIX}/auth/login",
+            f"{settings.API_V1_PREFIX}/auth/register",
+            f"{settings.API_V1_PREFIX}/auth/refresh",
+            f"{settings.API_V1_PREFIX}/openapi.json",
+        ],
+        whitelist_prefixes=[
+            f"{settings.API_V1_PREFIX}/health",
+            "/docs",
+            "/redoc",
+        ],
+    )
 
     register_exception_handlers(application)
     application.include_router(api_router, prefix=settings.API_V1_PREFIX)

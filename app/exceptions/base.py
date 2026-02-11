@@ -61,6 +61,18 @@ class UserNotFoundError(AppError):
     message = "User not found"
 
 
+# 404xx - Not found (continued)
+class ConversationNotFoundError(AppError):
+    code = 40403
+    message = "Conversation not found"
+
+
+# 403xx - Access denied
+class ConversationAccessDeniedError(AppError):
+    code = 40301
+    message = "Conversation access denied"
+
+
 # 500xx - Server errors
 class InternalError(AppError):
     code = 50001

@@ -1,4 +1,7 @@
+from app.core.config import settings
+from app.core.redis import redis_client
 from app.core.security import (
+    active_token_key,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -7,6 +10,9 @@ from app.core.security import (
 from app.exceptions.base import InvalidCredentialsError, InvalidTokenError
 from app.repositories.user import UserRepository
 from app.schemas.auth import LoginResponse, TokenResponse
+
+# access_token 的 Redis TTL（秒）
+_ACCESS_TOKEN_TTL = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
 
 class AuthService:
@@ -20,6 +26,10 @@ class AuthService:
 
         access_token = create_access_token(subject=user.id)
         refresh_token = create_refresh_token(subject=user.id)
+
+        await redis_client.set(
+            active_token_key(access_token), str(user.id), ex=_ACCESS_TOKEN_TTL
+        )
 
         return LoginResponse(
             access_token=access_token,
@@ -42,5 +52,14 @@ class AuthService:
             raise InvalidTokenError()
 
         access_token = create_access_token(subject=user_id)
+
+        await redis_client.set(
+            active_token_key(access_token), str(user_id), ex=_ACCESS_TOKEN_TTL
+        )
+
         return TokenResponse(access_token=access_token)
 
+    @staticmethod
+    async def logout(token: str) -> None:
+        """从 Redis 中删除 token，使其立即失效"""
+        await redis_client.delete(active_token_key(token))

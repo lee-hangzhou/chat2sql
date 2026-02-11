@@ -5,7 +5,9 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.core.security import decode_token
+from app.core.logger import logger
+from app.core.redis import redis_client
+from app.core.security import active_token_key, decode_token
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -42,7 +44,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={
                     "code": 401,
-                    "message": "Missing authorization header",
+                    "msg": "Missing authorization header",
                     "data": None,
                 },
             )
@@ -52,7 +54,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={
                     "code": 401,
-                    "message": "Invalid authorization header format",
+                    "msg": "Invalid authorization header format",
                     "data": None,
                 },
             )
@@ -65,7 +67,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={
                     "code": 401,
-                    "message": "Invalid or expired token",
+                    "msg": "Invalid or expired token",
                     "data": None,
                 },
             )
@@ -75,7 +77,29 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={
                     "code": 401,
-                    "message": "Invalid token type",
+                    "msg": "Invalid token type",
+                    "data": None,
+                },
+            )
+
+        # 双重校验：JWT 签名通过后，再验证 Redis 中 token 是否存活
+        try:
+            if not await redis_client.exists(active_token_key(token)):
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={
+                        "code": 401,
+                        "msg": "Token not active or already revoked",
+                        "data": None,
+                    },
+                )
+        except Exception:
+            logger.warning("jwt.redis_check_failed", path=path)
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "code": 503,
+                    "msg": "Authentication service temporarily unavailable",
                     "data": None,
                 },
             )
