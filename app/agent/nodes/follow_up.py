@@ -7,9 +7,9 @@ from app.agent.states import NL2SQLState
 from app.core import Singleton
 
 
-class FlowUp(Singleton):
+class FollowUp(Singleton):
     def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
-        user_reply = interrupt(state.intent_parse_result.flow_up_question)
+        user_reply = interrupt(state.intent_parse_result.follow_up_question)
         return {
             "messages": [HumanMessage(content=user_reply)]
         }

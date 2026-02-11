@@ -30,3 +30,7 @@ class NL2SQLState(BaseModel):
 
     # SQL 执行结果（由 executor 节点写入）
     execute_result: Optional[List[Dict[str, Any]]] = Field(default=None, description="SQL执行结果集")
+
+    # 终态（由 sql_validator / executor 写入）
+    is_success: Optional[bool] = Field(default=None, description="最终执行是否成功")
+    error_message: Optional[str] = Field(default=None, description="失败时的错误描述")

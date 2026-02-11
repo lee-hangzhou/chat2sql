@@ -13,7 +13,7 @@ INTENT_RECOGNITION_SYSTEM_PROMPT = """
 - **判断 schema 是否够**：如果表结构不够用（缺少关联表、字段不全），标记 need_retry_retrieve=true
 
 ## 判断逻辑
-### 何时需要追问（need_flow_up=true）
+### 何时需要追问（need_follow_up=true）
 - 用户意图模糊（"查询数据"、"统计一下"）
 - 缺少必要参数（"最近的订单" - 最近多久）
 - 有多种理解方式需要确认

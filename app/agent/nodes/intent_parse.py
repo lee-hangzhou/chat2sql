@@ -20,7 +20,7 @@ class IntentParse(Singleton):
             return state.intent_parse_result.ir_ast.model_dump_json(indent=2)
         return None
 
-    def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
+    async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         existing_ir_ast = self._get_existing_ir_ast(state)
         schemas = "\n\n".join(state.schemas)
 
@@ -35,10 +35,10 @@ class IntentParse(Singleton):
             params["existing_ir_ast"] = existing_ir_ast
         prompt_messages = ChatPrompt.intent_recognition_prompt(**params)
 
-        result: IntentParseResult = self.structured_llm.invoke(prompt_messages)
+        result: IntentParseResult = await self.structured_llm.ainvoke(prompt_messages)
         return_dict = dict()
-        if result.need_flow_up and result.flow_up_question:
-            return_dict["messages"] = [AIMessage(content=result.flow_up_question)]
+        if result.need_follow_up and result.follow_up_question:
+            return_dict["messages"] = [AIMessage(content=result.follow_up_question)]
 
         return_dict["intent_parse_result"] = result
         return return_dict

@@ -1,8 +1,10 @@
+from functools import lru_cache
+
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 
 from app.agent.nodes.executor import Executor
-from app.agent.nodes.fllow_up import FlowUp
+from app.agent.nodes.follow_up import FollowUp
 from app.agent.nodes.intent_parse import IntentParse
 from app.agent.nodes.schema_retriever import SchemaRetriever
 from app.agent.nodes.sql_generator import SQLGenerator
@@ -13,7 +15,7 @@ from app.core.config import settings
 # 节点名称常量
 SCHEMA_RETRIEVER = "schema_retriever"
 INTENT_PARSE = "intent_parse"
-FLOW_UP = "flow_up"
+FOLLOW_UP = "follow_up"
 SQL_GENERATOR = "sql_generator"
 SQL_VALIDATOR = "sql_validator"
 EXECUTOR = "executor"
@@ -22,8 +24,8 @@ EXECUTOR = "executor"
 def route_after_intent_parse(state: NL2SQLState) -> str:
     """意图解析后的路由：追问 / 重新检索 / 生成 SQL"""
     result = state.intent_parse_result
-    if result.need_flow_up:
-        return FLOW_UP
+    if result.need_follow_up:
+        return FOLLOW_UP
     if result.need_retry_retrieve:
         return SCHEMA_RETRIEVER
     return SQL_GENERATOR
@@ -42,12 +44,12 @@ def route_after_validate(state: NL2SQLState) -> str:
     return EXECUTOR
 
 
-def build_graph():
+def _build_graph():
     graph = StateGraph(NL2SQLState)
 
     graph.add_node(SCHEMA_RETRIEVER, SchemaRetriever())
     graph.add_node(INTENT_PARSE, IntentParse())
-    graph.add_node(FLOW_UP, FlowUp())
+    graph.add_node(FOLLOW_UP, FollowUp())
     graph.add_node(SQL_GENERATOR, SQLGenerator())
     graph.add_node(SQL_VALIDATOR, SQLValidator())
     graph.add_node(EXECUTOR, Executor())
@@ -55,7 +57,7 @@ def build_graph():
     graph.add_edge(START, SCHEMA_RETRIEVER)
     graph.add_edge(SCHEMA_RETRIEVER, INTENT_PARSE)
     graph.add_conditional_edges(INTENT_PARSE, route_after_intent_parse)
-    graph.add_edge(FLOW_UP, INTENT_PARSE)
+    graph.add_edge(FOLLOW_UP, INTENT_PARSE)
     graph.add_edge(SQL_GENERATOR, SQL_VALIDATOR)
     graph.add_conditional_edges(SQL_VALIDATOR, route_after_validate)
     graph.add_edge(EXECUTOR, END)
@@ -64,4 +66,6 @@ def build_graph():
     return graph.compile(checkpointer=checkpointer)
 
 
-nl2sql_graph = build_graph()
+@lru_cache(maxsize=1)
+def get_graph():
+    return _build_graph()

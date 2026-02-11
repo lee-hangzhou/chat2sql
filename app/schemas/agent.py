@@ -11,10 +11,10 @@ class DatabaseType(Enum):
 
 
 class IntentParseResult(BaseModel):
-    need_flow_up: Optional[bool] = Field(default=None, description="是否需要追问")
+    need_follow_up: Optional[bool] = Field(default=None, description="是否需要追问")
     need_retry_retrieve: Optional[bool] = Field(default=None, description="是否需要重新检索schema")
     ir_ast: Optional[QueryElement] = Field(default=None, description="中间表示的抽象语法树")
-    flow_up_question: Optional[str] = Field(default=None, description="追问的问题")
+    follow_up_question: Optional[str] = Field(default=None, description="追问的问题")
 
 
 class SQLResult(BaseModel):

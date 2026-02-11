@@ -135,38 +135,51 @@ class SQLValidator(Singleton):
             explains=explains_str,
         )
 
+    @staticmethod
+    def _build_fail_result(
+            state: NL2SQLState,
+        syntax_result: SyntaxResult,
+        explain_error: Optional[str],
+        performance_result: Optional[PerformanceResult],
+        error_message: str,
+    ) -> Dict[str, Any]:
+        """构建校验失败的返回值，达到重试上限时附加终态标记"""
+        new_retry_count = state.retry_count + 1
+        result: Dict[str, Any] = {
+            "syntax_result": syntax_result,
+            "explain_error": explain_error,
+            "performance_result": performance_result,
+            "retry_count": new_retry_count,
+        }
+        if new_retry_count >= settings.AGENT_MAX_RETRIES:
+            result["is_success"] = False
+            result["error_message"] = error_message
+        return result
+
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         sql = state.sql_result.sql
 
         # 1. 语法校验
         syntax_result = self._parse_syntax(sql)
         if not syntax_result.is_ok:
-            return {
-                "syntax_result": syntax_result,
-                "explain_error": None,
-                "performance_result": None,
-                "retry_count": state.retry_count + 1,
-            }
+            return self._build_fail_result(
+                state, syntax_result, None, None, syntax_result.error,
+            )
 
         # 2. 执行 EXPLAIN
         explain_result = await self._execute_explain(sql)
         if explain_result.error:
-            return {
-                "syntax_result": syntax_result,
-                "explain_error": explain_result.error,
-                "performance_result": None,
-                "retry_count": state.retry_count + 1,
-            }
+            return self._build_fail_result(
+                state, syntax_result, explain_result.error, None, explain_result.error,
+            )
 
         # 3. 性能校验
         performance_result = self._parse_explain(explain_result)
         if not performance_result.is_ok:
-            return {
-                "syntax_result": syntax_result,
-                "explain_error": None,
-                "performance_result": performance_result,
-                "retry_count": state.retry_count + 1,
-            }
+            return self._build_fail_result(
+                state, syntax_result, None, performance_result,
+                "; ".join(performance_result.issues),
+            )
 
         return {
             "syntax_result": syntax_result,

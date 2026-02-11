@@ -18,4 +18,4 @@ class Executor(Singleton):
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         result = await self._execute_sql(state.sql_result.sql)
-        return {"execute_result": result}
+        return {"execute_result": result, "is_success": True}
