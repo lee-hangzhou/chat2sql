@@ -1,13 +1,11 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Union
 
+import bcrypt
 import jwt
 from jwt.exceptions import InvalidTokenError
-from passlib.context import CryptContext
 
 from app.core.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ACTIVE_TOKEN_PREFIX = "active_token:"
 
@@ -18,17 +16,17 @@ def active_token_key(token: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    result = pwd_context.verify(plain_password, hashed_password)
-    if not isinstance(result, bool):
-        raise TypeError(f"Expected bool from verify, got {type(result)}")
-    return result
+    return bcrypt.checkpw(
+        plain_password.encode("utf-8"),
+        hashed_password.encode("utf-8"),
+    )
 
 
 def get_password_hash(password: str) -> str:
-    result = pwd_context.hash(password)
-    if not isinstance(result, str):
-        raise TypeError(f"Expected str from hash, got {type(result)}")
-    return result
+    return bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt(),
+    ).decode("utf-8")
 
 
 def create_access_token(

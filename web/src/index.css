@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sidebar: #202123;
+  --color-sidebar-hover: #2a2b32;
+  --color-sidebar-active: #343541;
+  --color-chat-bg: #f9fafb;
+  --color-user-bubble: #2563eb;
+  --color-assistant-bubble: #ffffff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}

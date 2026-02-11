@@ -1,13 +1,16 @@
-.PHONY: help install dev test lint format clean docker-build docker-up docker-down
+.PHONY: help install dev test lint format clean docker-build docker-up docker-down fe-install fe-dev fe-build
 
 help:
 	@echo "Available commands:"
-	@echo "  make install      Install dependencies"
-	@echo "  make dev          Start development server"
+	@echo "  make install      Install backend dependencies"
+	@echo "  make dev          Start backend dev server"
 	@echo "  make test         Run tests"
 	@echo "  make lint         Run linter"
 	@echo "  make format       Format code"
 	@echo "  make clean        Clean cache files"
+	@echo "  make fe-install   Install frontend dependencies"
+	@echo "  make fe-dev       Start frontend dev server"
+	@echo "  make fe-build     Build frontend for production"
 	@echo "  make docker-build Build Docker image"
 	@echo "  make docker-up    Start all services"
 	@echo "  make docker-down  Stop all services"
@@ -41,6 +44,19 @@ clean:
 	find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
+# ---- Frontend ----
+
+fe-install:
+	cd web && npm install
+
+fe-dev:
+	cd web && npm run dev
+
+fe-build:
+	cd web && npm run build
+
+# ---- Docker ----
+
 docker-build:
 	docker-compose build
 
@@ -52,5 +68,3 @@ docker-down:
 
 docker-logs:
 	docker-compose logs -f app
-
-

@@ -64,7 +64,11 @@ class Database(Singleton):
                 settings.BUSINESS_DATABASE_URL
             )
 
-        await Tortoise.init(config=tortoise_config)
+        await Tortoise.init(
+            config=tortoise_config,
+            _enable_global_fallback=True,
+        )
+        await Tortoise.generate_schemas(safe=True)
 
         self._initialized = True
         logger.info("Database initialized")

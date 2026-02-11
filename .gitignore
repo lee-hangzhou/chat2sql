@@ -57,3 +57,11 @@ logs/
 .mypy_cache/
 .ruff_cache/
 
+# Frontend
+web/node_modules/
+web/dist/
+
+# Docker volumes (Milvus etc.)
+volumes/
+milvus-docker-compose.yml
+
