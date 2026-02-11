@@ -12,4 +12,4 @@ class RetrievalClient(MilvusClient, Singleton):
 
 
 
-retrieval_client = RetrievalClient()
+retrieval_client = RetrievalClient(uri=settings.MILVUS_URI)

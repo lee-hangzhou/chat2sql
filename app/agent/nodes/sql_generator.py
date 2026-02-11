@@ -3,11 +3,10 @@ from typing import Dict, Any
 from app.agent.prompts import ChatPrompt
 from app.agent.states import NL2SQLState
 from app.schemas.agent import SQLResult
-from app.core import Singleton
 from app.core.llm import llm
 
 
-class SQLGenerator(Singleton):
+class SQLGenerator:
     def __init__(self):
         self.structured_llm = llm.with_structured_output(SQLResult)
 

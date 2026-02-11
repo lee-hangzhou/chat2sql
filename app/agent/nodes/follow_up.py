@@ -4,10 +4,9 @@ from langchain_core.messages import HumanMessage
 from langgraph.types import interrupt
 
 from app.agent.states import NL2SQLState
-from app.core import Singleton
 
 
-class FollowUp(Singleton):
+class FollowUp:
     def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         user_reply = interrupt(state.intent_parse_result.follow_up_question)
         return {

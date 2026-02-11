@@ -5,12 +5,11 @@ from langchain_core.messages import AIMessage
 from app.agent.prompts import ChatPrompt
 from app.agent.states import NL2SQLState
 from app.schemas.agent import IntentParseResult
-from app.core import Singleton
 from app.core.llm import llm
 from app.vars.prompts import IR_AST_TAG
 
 
-class IntentParse(Singleton):
+class IntentParse:
     def __init__(self):
         self.structured_llm = llm.with_structured_output(IntentParseResult)
 

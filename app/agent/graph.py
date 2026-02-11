@@ -1,5 +1,7 @@
-from functools import lru_cache
+from contextlib import contextmanager
+from typing import Generator
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 
@@ -10,7 +12,7 @@ from app.agent.nodes.schema_retriever import SchemaRetriever
 from app.agent.nodes.sql_generator import SQLGenerator
 from app.agent.nodes.sql_validator import SQLValidator
 from app.agent.states import NL2SQLState
-from app.core.config import settings
+from app.core.config import CheckpointerType, settings
 
 # 节点名称常量
 SCHEMA_RETRIEVER = "schema_retriever"
@@ -44,7 +46,29 @@ def route_after_validate(state: NL2SQLState) -> str:
     return EXECUTOR
 
 
-def _build_graph():
+@contextmanager
+def create_checkpointer() -> Generator[BaseCheckpointSaver, None, None]:
+    """根据配置创建 checkpointer，通过 context manager 管理连接生命周期"""
+    checkpointer_type = settings.CHECKPOINTER_TYPE
+
+    if checkpointer_type == CheckpointerType.SQLITE:
+        from langgraph.checkpoint.sqlite import SqliteSaver
+        with SqliteSaver.from_conn_string(settings.CHECKPOINTER_SQLITE_PATH) as saver:
+            yield saver
+            return
+
+    if checkpointer_type == CheckpointerType.POSTGRES:
+        from langgraph.checkpoint.postgres import PostgresSaver
+        with PostgresSaver.from_conn_string(settings.CHECKPOINTER_POSTGRES_URI) as saver:
+            saver.setup()
+            yield saver
+            return
+
+    yield MemorySaver()
+
+
+def build_graph(checkpointer: BaseCheckpointSaver):
+    """构建 NL2SQL graph，checkpointer 由调用方注入"""
     graph = StateGraph(NL2SQLState)
 
     graph.add_node(SCHEMA_RETRIEVER, SchemaRetriever())
@@ -62,10 +86,4 @@ def _build_graph():
     graph.add_conditional_edges(SQL_VALIDATOR, route_after_validate)
     graph.add_edge(EXECUTOR, END)
 
-    checkpointer = MemorySaver()
     return graph.compile(checkpointer=checkpointer)
-
-
-@lru_cache(maxsize=1)
-def get_graph():
-    return _build_graph()

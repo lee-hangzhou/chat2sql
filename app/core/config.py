@@ -1,7 +1,14 @@
+from enum import Enum
 from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class CheckpointerType(str, Enum):
+    MEMORY = "memory"
+    SQLITE = "sqlite"
+    POSTGRES = "postgres"
 
 
 class Settings(BaseSettings):
@@ -28,6 +35,11 @@ class Settings(BaseSettings):
     EXPLAIN_MAX_ROWS: int = Field(default=10000, description="EXPLAIN 预估扫描行数阈值，超过则标记为性能问题")
     AGENT_MAX_RETRIES: int = Field(default=3, description="SQL 校验失败最大重试次数")
 
+    # Checkpointer
+    CHECKPOINTER_TYPE: CheckpointerType = Field(default=CheckpointerType.MEMORY, description="checkpointer 后端类型")
+    CHECKPOINTER_SQLITE_PATH: str = Field(default="./checkpoints.db", description="SQLite checkpointer 文件路径")
+    CHECKPOINTER_POSTGRES_URI: Optional[str] = Field(default=None, description="PostgreSQL checkpointer 连接地址")
+
 
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
     REDIS_MAX_CONNECTIONS: int = Field(default=10)
@@ -48,12 +60,9 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI 模型名")
     OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，可选")
 
-    # milvus配置
-    MILVUS_HOST: str = Field(default="localhost")
-    MILVUS_PORT: int = Field(default=19530)
-    EMBEDDING_MODEL:str = Field(default="BAAI/bge-large-zh-v1.5")
-
-
+    # Milvus
+    MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")
+    EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
 
     @property
     def cors_origins_list(self) -> List[str]:

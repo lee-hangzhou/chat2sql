@@ -5,13 +5,12 @@ from sqlglot import exp
 from tortoise.exceptions import OperationalError
 
 from app.agent.states import NL2SQLState
-from app.core import Singleton
 from app.core.database import business_db
 from app.core.config import settings
 from app.schemas.agent import ExecuteExplainResult, Explain, PerformanceResult, SyntaxResult
 
 
-class SQLValidator(Singleton):
+class SQLValidator:
     # SQL 层面的错误码：可通过重新生成 SQL 来修复
     _SQL_ERROR_CODES = frozenset({
         1054,  # Unknown column

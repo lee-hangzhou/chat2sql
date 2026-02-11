@@ -1,15 +1,14 @@
-from typing import List, Optional
+from typing import List
 
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from app.core import Singleton
 from app.vars.prompts import INTENT_RECOGNITION_SYSTEM_PROMPT, INTENT_RECOGNITION_HUMAN_PROMPT, \
     GENERATE_SQL_SYSTEM_PROMPT, GENERATE_SQL_HUMAN_PROMPT
 from app.vars.vars import HUMAN_TYPE, SYSTEM_TYPE
 
 
-class ChatPrompt(Singleton):
+class ChatPrompt:
 
     @classmethod
     def intent_recognition_prompt(

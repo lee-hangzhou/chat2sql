@@ -1,11 +1,10 @@
 from typing import Any, Dict, List
 
 from app.agent.states import NL2SQLState
-from app.core import Singleton
 from app.core.database import business_db
 
 
-class Executor(Singleton):
+class Executor:
     """执行验证通过的 SQL，返回原始查询结果"""
 
     def __init__(self):
