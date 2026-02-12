@@ -28,7 +28,5 @@ async def refresh_token(request: RefreshRequest) -> Response[TokenResponse]:
 
 @router.post("/logout")
 async def logout(request: Request) -> Response[None]:
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header.removeprefix("Bearer ").strip()
-    await registry.auth_service.logout(token)
-    return Response(data=None, msg="Logged out")
+    await registry.auth_service.logout(request.state.token)
+    return Response(data=None)

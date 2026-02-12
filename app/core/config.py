@@ -1,8 +1,11 @@
 from enum import Enum
+from pathlib import Path
 from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class CheckpointerType(str, Enum):
@@ -13,7 +16,7 @@ class CheckpointerType(str, Enum):
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -59,9 +62,9 @@ class Settings(BaseSettings):
     LOG_FORMAT: str = Field(default="json")
 
     # NL2SQL Agent
-    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key，使用本地模型时无需配置")
+    OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key，本地模型填任意非空值如 ollama")
     OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI 模型名")
-    OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，可选")
+    OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，留空则使用 OpenAI 官方地址")
     LLM_MAX_RETRIES: int = Field(default=3, description="LLM HTTP 层重试次数（网络错误、限流等）")
     LLM_RETRY_ATTEMPTS: int = Field(default=3, description="LLM structured output 应用层重试次数")
     AGENT_RECURSION_LIMIT: int = Field(default=25, description="LangGraph 单次调用最大节点执行次数")

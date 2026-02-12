@@ -8,6 +8,7 @@ from langgraph.types import Command
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.vars.vars import HUMAN_TYPE, ROLE_ASSISTANT, ROLE_USER
 from app.exceptions.base import ConversationAccessDeniedError, ConversationNotFoundError
 from app.models.conversation import Conversation
 from app.repositories.conversation import ConversationRepository
@@ -17,12 +18,6 @@ from app.schemas.chat import (
     ConversationStatus,
     MessageItem,
 )
-
-
-def _sse_event(event: str, data: Dict[str, Any]) -> str:
-    """构造 SSE 格式字符串"""
-    payload = json.dumps(data, ensure_ascii=False, default=str)
-    return f"event: {event}\ndata: {payload}\n\n"
 
 
 class ChatService:
@@ -66,14 +61,14 @@ class ChatService:
         if state and state.values:
             values = state.values
             for msg in values.get("messages", []):
-                role = "user" if msg.type == "human" else "assistant"
+                role = ROLE_USER if msg.type == HUMAN_TYPE else ROLE_ASSISTANT
                 messages.append(MessageItem(role=role, content=msg.content))
 
             sql_result = values.get("sql_result")
             if sql_result:
                 sql = getattr(sql_result, "sql", None) or sql_result.get("sql")
 
-            execute_result = values.get("execute_result")
+            execute_result = self._stringify_rows(values.get("execute_result"))
 
             ec = values.get("error_code")
             error_code = ec.value if ec else None
@@ -115,10 +110,7 @@ class ChatService:
         user_id: int,
         content: str,
     ) -> AsyncGenerator[str, None]:
-        """校验权限并构建输入，返回 SSE 事件流的异步生成器。
-
-        该方法的 eager 部分（校验、构建输入）在 await 时执行；
-        返回的 async generator 在被迭代时才启动 graph 执行。
+        """校验权限并构建输入，返回 SSE 事件流的异步生成器
         """
         conversation = await self._get_owned_conversation(conversation_id, user_id)
         config = self._build_config(conversation.thread_id)
@@ -143,7 +135,7 @@ class ChatService:
 
         return self._stream_graph(graph, conversation, config, input_data)
 
-    # -------------------- internal --------------------
+
 
     async def _stream_graph(
         self,
@@ -158,7 +150,7 @@ class ChatService:
                 input_data, config, stream_mode="updates"
             ):
                 for node_name in event:
-                    yield _sse_event("node_complete", {"node": node_name})
+                    yield self._sse_event("node_complete", {"node": node_name})
 
             # graph 执行结束，判断终态
             state = await graph.aget_state(config)
@@ -175,7 +167,7 @@ class ChatService:
                         or ipr.get("follow_up_question", "")
                         or ""
                     )
-                yield _sse_event("follow_up", {"question": question})
+                yield self._sse_event("follow_up", {"question": question})
             else:
                 values = state.values
                 if values.get("is_success"):
@@ -188,11 +180,11 @@ class ChatService:
                         sql = getattr(sql_result, "sql", None) or sql_result.get(
                             "sql"
                         )
-                    yield _sse_event(
+                    yield self._sse_event(
                         "result",
                         {
                             "sql": sql,
-                            "execute_result": values.get("execute_result"),
+                            "execute_result": self._stringify_rows(values.get("execute_result")),
                         },
                     )
                 else:
@@ -200,7 +192,7 @@ class ChatService:
                         conversation.id, ConversationStatus.FAILED
                     )
                     ec = values.get("error_code")
-                    yield _sse_event(
+                    yield self._sse_event(
                         "error",
                         {
                             "error_code": ec.value if ec else None,
@@ -208,7 +200,7 @@ class ChatService:
                         },
                     )
 
-            yield _sse_event("done", {})
+            yield self._sse_event("done", {})
 
         except Exception as e:
             logger.exception(
@@ -219,8 +211,8 @@ class ChatService:
             await self.repo.update_status(
                 conversation.id, ConversationStatus.FAILED
             )
-            yield _sse_event("error", {"error_message": str(e)})
-            yield _sse_event("done", {})
+            yield self._sse_event("error", {"error_message": str(e)})
+            yield self._sse_event("done", {})
 
     async def _get_owned_conversation(
         self, conversation_id: int, user_id: int
@@ -239,3 +231,17 @@ class ChatService:
             "configurable": {"thread_id": thread_id},
             "recursion_limit": settings.AGENT_RECURSION_LIMIT,
         }
+
+    @staticmethod
+    def _sse_event(event: str, data: Dict[str, Any]) -> str:
+        payload = json.dumps(data, ensure_ascii=False, default=str)
+        return f"event: {event}\ndata: {payload}\n\n"
+
+    @staticmethod
+    def _stringify_rows(rows: list[dict] | None) -> list[dict] | None:
+        if not rows:
+            return rows
+        return [
+            {k: str(v) if isinstance(v, int) else v for k, v in row.items()}
+            for row in rows
+        ]

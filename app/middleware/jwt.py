@@ -104,6 +104,7 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+        request.state.token = token
         request.state.user_id = payload.get("sub")
         request.state.user_roles = payload.get("roles", [])
         request.state.token_payload = payload

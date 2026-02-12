@@ -98,15 +98,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             body_bytes = await request.body()
-
-            async def receive() -> Dict[str, Union[str, bytes]]:
-                return {"type": "http.request", "body": body_bytes}
-
-            request._receive = receive
-
             if len(body_bytes) > self.MAX_BODY_LOG_SIZE:
                 return "[body too large]"
-
             return body_bytes.decode("utf-8") if body_bytes else None
         except (UnicodeDecodeError, RuntimeError):
             return "[unable to read body]"

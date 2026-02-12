@@ -73,6 +73,10 @@ export interface ConversationDetail {
   follow_up_question: string | null
 }
 
+export interface SchemaSyncResult {
+  table_count: number
+}
+
 /* ---- SSE Events ---- */
 
 export interface SSENodeComplete {

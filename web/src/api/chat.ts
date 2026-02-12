@@ -1,5 +1,5 @@
 import { post, postSSE } from './client'
-import type { Conversation, ConversationDetail, PaginatedData } from '../types'
+import type { Conversation, ConversationDetail, PaginatedData, SchemaSyncResult } from '../types'
 
 export function createConversation(): Promise<Conversation> {
   return post<Conversation>('/chat/conversations/create')
@@ -34,4 +34,8 @@ export function sendMessageStream(conversationId: number, content: string) {
     conversation_id: conversationId,
     content,
   })
+}
+
+export function syncSchema(): Promise<SchemaSyncResult> {
+  return post<SchemaSyncResult>('/chat/schema/sync')
 }

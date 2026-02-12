@@ -45,8 +45,11 @@ async function request<T>(
   })
 
   if (res.status === 401) {
+    const hadToken = !!getToken()
     clearTokens()
-    window.dispatchEvent(new CustomEvent('auth:expired'))
+    if (hadToken) {
+      window.dispatchEvent(new CustomEvent('auth:expired'))
+    }
     throw new Error('Unauthorized')
   }
 

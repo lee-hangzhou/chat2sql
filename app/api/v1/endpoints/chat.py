@@ -8,6 +8,7 @@ from app.schemas.chat import (
     ConversationDetailResponse,
     ConversationListItem,
     ConversationListRequest,
+    SchemaSyncResponse,
     SendMessageRequest,
 )
 from app.services import registry
@@ -51,7 +52,7 @@ async def delete_conversation(
 ) -> Response[None]:
     user_id = int(request.state.user_id)
     await registry.chat_service.delete_conversation(body.conversation_id, user_id)
-    return Response(data=None, msg="Conversation deleted")
+    return Response(data=None)
 
 
 @router.post("/conversations/messages/send")
@@ -67,3 +68,10 @@ async def send_message(request: Request, body: SendMessageRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
+
+
+@router.post("/schema/sync")
+async def sync_schema() -> Response[SchemaSyncResponse]:
+    """从业务数据库全量同步表结构到 Milvus"""
+    table_count = await registry.schema_service.sync()
+    return Response(data=SchemaSyncResponse(table_count=table_count))

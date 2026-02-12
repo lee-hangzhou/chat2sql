@@ -1,4 +1,6 @@
-import { MessageSquarePlus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { DatabaseZap, MessageSquarePlus, Trash2 } from 'lucide-react'
+import { syncSchema } from '../api/chat'
 import { useChatStore } from '../stores/chat'
 
 export default function Sidebar() {
@@ -11,9 +13,24 @@ export default function Sidebar() {
     sending,
   } = useChatStore()
 
+  const [syncing, setSyncing] = useState(false)
+
   const handleNew = async () => {
     if (sending) return
     await createConversation()
+  }
+
+  const handleSync = async () => {
+    if (syncing) return
+    setSyncing(true)
+    try {
+      const result = await syncSchema()
+      alert(`同步完成，共 ${result.table_count} 张表`)
+    } catch (e) {
+      alert(`同步失败: ${e instanceof Error ? e.message : '未知错误'}`)
+    } finally {
+      setSyncing(false)
+    }
   }
 
   return (
@@ -64,6 +81,18 @@ export default function Sidebar() {
           </p>
         )}
       </nav>
+
+      {/* 同步 Schema */}
+      <div className="border-t border-gray-700 p-3">
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="flex w-full items-center gap-2 rounded-lg px-4 py-2 text-xs text-gray-400 hover:bg-[var(--color-sidebar-hover)] hover:text-gray-200 disabled:opacity-40"
+        >
+          <DatabaseZap size={16} className={syncing ? 'animate-spin' : ''} />
+          {syncing ? '同步中...' : '同步 Schema'}
+        </button>
+      </div>
     </aside>
   )
 }

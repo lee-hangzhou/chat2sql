@@ -47,7 +47,21 @@ setup:
 	@echo "Setup complete. Next steps:"
 	@echo "  1. Edit .env with your configuration"
 	@echo "  2. make services-up"
-	@echo "  3. make dev"
+	@echo "  3. make db-init"
+	@echo "  4. make dev"
+
+db-init:
+	@. .env 2>/dev/null; \
+	DB_NAME=$$(echo $$DATABASE_URL | sed -n 's|.*\/\([^?]*\).*|\1|p'); \
+	DB_HOST=$$(echo $$DATABASE_URL | sed -n 's|.*@\([^:]*\):.*|\1|p'); \
+	DB_PORT=$$(echo $$DATABASE_URL | sed -n 's|.*:\([0-9]*\)/.*|\1|p'); \
+	DB_USER=$$(echo $$DATABASE_URL | sed -n 's|.*://\([^:]*\):.*|\1|p'); \
+	DB_PASS=$$(echo $$DATABASE_URL | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p'); \
+	echo "Creating database '$$DB_NAME' if not exists..."; \
+	mysql -h $$DB_HOST -P $$DB_PORT -u $$DB_USER -p$$DB_PASS \
+		-e "CREATE DATABASE IF NOT EXISTS \`$$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" \
+		&& echo "[OK] Database '$$DB_NAME' ready." \
+		|| echo "[FAIL] Could not create database. Check your DATABASE_URL and MySQL connection."
 
 # 基础设施服务
 

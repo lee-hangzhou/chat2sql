@@ -179,15 +179,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
           case 'error': {
             const { error_message } = data as unknown as SSEError
+            if (error_message) {
+              console.error('[chat] agent error:', error_message)
+            }
             set({
-              errorMessage: error_message || '执行出错',
+              errorMessage: error_message || null,
               currentNode: null,
               messages: [
                 ...get().messages,
-                {
-                  role: 'assistant',
-                  content: `出错了：${error_message || '未知错误'}`,
-                },
+                { role: 'assistant', content: '执行出错，请重试' },
               ],
             })
             break

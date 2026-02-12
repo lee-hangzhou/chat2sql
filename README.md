@@ -66,9 +66,11 @@ make setup
 OPENAI_API_KEY=sk-xxxx
 OPENAI_MODEL=gpt-4o-mini
 
-# 使用 Ollama 等本地模型（无需 API Key）
+# 使用 Ollama 等本地模型
+# openai 客户端库要求 API Key 非空，填任意值即可，Ollama 会忽略
+OPENAI_API_KEY=ollama
 OPENAI_BASE_URL=http://localhost:11434/v1
-OPENAI_MODEL=qwen2.5
+OPENAI_MODEL=qwen3:8b
 
 # 业务数据库（NL2SQL 的查询目标库）
 BUSINESS_DATABASE_URL=mysql://root:123456@localhost:3306/your_business_db
@@ -86,7 +88,15 @@ make services-up
 
 可通过 `docker compose ps` 确认所有服务状态为 healthy。
 
-**4. 启动后端**
+**4. 初始化数据库**
+
+```bash
+make db-init
+```
+
+该命令会根据 `.env` 中的 `DATABASE_URL` 自动创建应用数据库（如 `chat2sql`）。应用启动时会自动建表。
+
+**5. 启动后端**
 
 ```bash
 make dev
@@ -94,7 +104,7 @@ make dev
 
 后端启动后会自动创建数据库表。API 文档：http://localhost:8000/docs
 
-**5. 启动前端**
+**6. 启动前端**
 
 ```bash
 make fe-dev
@@ -102,7 +112,7 @@ make fe-dev
 
 前端默认运行在 http://localhost:3000 。
 
-**6. 停止基础设施服务**
+**7. 停止基础设施服务**
 
 ```bash
 make services-down
@@ -146,6 +156,7 @@ make docker-down
 |------|------|
 | `make help` | 查看所有可用命令 |
 | `make setup` | 首次初始化（安装依赖 + 生成 .env） |
+| `make db-init` | 创建应用数据库 |
 | `make services-up` | 启动基础设施服务 |
 | `make services-down` | 停止基础设施服务 |
 | `make dev` | 启动后端开发服务器 |

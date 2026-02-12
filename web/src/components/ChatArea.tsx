@@ -3,7 +3,6 @@ import { useChatStore } from '../stores/chat'
 import { useAuthStore } from '../stores/auth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
-import ResultTable from './ResultTable'
 
 export default function ChatArea() {
   const { isAuthenticated } = useAuthStore()
@@ -45,17 +44,8 @@ export default function ChatArea() {
         messages={messages}
         currentNode={currentNode}
         sending={sending}
+        executeResult={executeResult}
       />
-
-      {/* SQL 执行结果表格 */}
-      {executeResult && executeResult.length > 0 && (
-        <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pb-2">
-          <p className="mb-2 text-xs font-medium text-gray-500">
-            查询结果（{executeResult.length} 行）
-          </p>
-          <ResultTable data={executeResult} />
-        </div>
-      )}
 
       <MessageInput
         onSend={sendMessage}

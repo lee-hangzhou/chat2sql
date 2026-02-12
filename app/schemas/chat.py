@@ -66,3 +66,7 @@ class ConversationDetailResponse(BaseModel):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     follow_up_question: Optional[str] = None
+
+
+class SchemaSyncResponse(BaseModel):
+    table_count: int

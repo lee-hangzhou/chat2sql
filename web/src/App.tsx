@@ -27,7 +27,10 @@ export default function App() {
   // 监听 token 过期事件
   useEffect(() => {
     const handler = () => {
-      useAuthStore.getState().logout()
+      const { isAuthenticated } = useAuthStore.getState()
+      if (isAuthenticated) {
+        useAuthStore.getState().logout()
+      }
     }
     window.addEventListener('auth:expired', handler)
     return () => window.removeEventListener('auth:expired', handler)
