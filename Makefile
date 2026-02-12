@@ -86,7 +86,7 @@ install-dev:
 	pre-commit install
 
 dev:
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	uvicorn app.main:app --reload --host 0.0.0.0 --port $${PORT:-8000}
 
 test:
 	pytest tests/ -v --cov=app --cov-report=term-missing

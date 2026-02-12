@@ -19,10 +19,13 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 FROM python:3.12-slim
 WORKDIR /app
 
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
 COPY --from=backend-builder /root/.local /home/appuser/.local
 ENV PATH=/home/appuser/.local/bin:$PATH
+
+# Ensure cache directory exists and is writable (for model downloads)
+RUN mkdir -p /home/appuser/.cache && chown -R appuser:appuser /home/appuser
 
 COPY --chown=appuser:appuser app/ ./app/
 COPY --from=frontend-builder --chown=appuser:appuser /web/dist ./web/dist
@@ -31,7 +34,7 @@ USER appuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

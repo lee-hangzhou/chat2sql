@@ -15,12 +15,22 @@
 ## Agent 流程
 
 ```
-schema_retriever → intent_parse → follow_up（可选，挂起等待用户回复）
-                                ↘ sql_generator → sql_validator → sql_selector
-                                                                   ↙         ↘
-                                                       sql_generator(仲裁)   sql_judge
-                                                                   ↘         ↙
-                                                                 executor → result_summarizer
+schema_retriever
+  ↓
+intent_parse
+  ↓
+  ├─ 意图不明确 → follow_up（挂起等待用户回复）→ 回到 intent_parse
+  ↓
+sql_generator
+  ↓
+sql_validator
+  ↓
+sql_selector
+  ├─ 结果一致 ────────────────→ executor
+  ├─ 结果不一致（首次）→ sql_generator（仲裁）→ 回到 sql_validator
+  └─ 结果不一致（仲裁后）→ sql_judge → executor
+                                         ↓
+                                  result_summarizer
 ```
 
 - **schema_retriever**: 基于 Milvus 向量检索匹配的表结构
@@ -62,9 +72,9 @@ chat2sql/
 
 ## 环境要求
 
-- Python >= 3.12
+- Python >= 3.12, < 3.14
 - Node.js >= 20
-- Docker & Docker Compose（用于运行基础设施服务）
+- Docker & Docker Compose
 
 ## 运行方式
 
@@ -80,12 +90,14 @@ chat2sql/
 git clone https://github.com/lee-hangzhou/chat2sql && cd chat2sql
 
 # 创建 Python 虚拟环境
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 
 # 一键初始化（安装依赖 + 生成 .env）
 make setup
 ```
+
+首次启动会自动下载嵌入模型（BAAI/bge-large-zh-v1.5，约 1.3GB）
 
 **2. 编辑配置**
 
@@ -160,13 +172,26 @@ make services-down
 
 ### 方式二：Docker Compose 全栈部署
 
-所有组件（应用、MySQL、Redis、Milvus）通过 Docker Compose 一键启动。适用于演示或生产部署。
+所有组件（应用、MySQL、Redis、Milvus）通过 Docker Compose 一键启动
 
 **1. 准备配置**
 
 ```bash
 cp .env.example .env
-# 编辑 .env，配置 OPENAI_API_KEY 等必填项
+```
+
+编辑 `.env`，**必须配置**以下内容：
+
+```bash
+# [必填] LLM 配置
+# 使用 Ollama 本地模型时，Docker 内 localhost 不可达宿主机，需使用 host.docker.internal
+OPENAI_API_KEY=ollama
+OPENAI_MODEL=qwen3:8b
+OPENAI_BASE_URL=http://host.docker.internal:11434/v1
+
+# [必填] 业务数据库
+# Docker 内使用服务名 mysql 而非 localhost，密码与 MYSQL_ROOT_PASSWORD 一致
+BUSINESS_DATABASE_URL=mysql://root:chat2sql@mysql:3306/your_business_db
 ```
 
 **2. 构建并启动**
@@ -177,6 +202,8 @@ make docker-up
 ```
 
 应用运行在 http://localhost:8000 ，前端已内嵌在后端中。
+
+首次构建需要下载基础镜像和安装依赖，耗时较长。
 
 **3. 查看日志**
 

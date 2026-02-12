@@ -15,6 +15,7 @@ services:
       - ENV=prod
       - DEBUG=false
       - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-chat2sql}@mysql:3306/chat2sql
+      - BUSINESS_DATABASE_URL=${BUSINESS_DATABASE_URL:-mysql://root:${MYSQL_ROOT_PASSWORD:-chat2sql}@mysql:3306/your_business_db}
       - REDIS_URL=redis://redis:6379/0
       - MILVUS_URI=http://milvus-standalone:19530
       - PHOENIX_COLLECTOR_ENDPOINT=http://phoenix:4317
