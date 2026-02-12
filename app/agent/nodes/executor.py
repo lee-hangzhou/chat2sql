@@ -1,4 +1,3 @@
-import time
 from typing import Any, Dict, List
 
 from langchain_core.messages import AIMessage
@@ -8,6 +7,7 @@ from app.core.config import settings
 from app.core.database import business_db
 from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode
+from app.utils.timing import log_elapsed
 
 
 class Executor:
@@ -34,14 +34,9 @@ class Executor:
         logger.info("executor.start")
 
         try:
-            start = time.monotonic()
-            result = await self._execute_sql(sql)
-            elapsed_ms = (time.monotonic() - start) * 1000
-            logger.info(
-                "executor.query_completed",
-                elapsed_ms=round(elapsed_ms, 1),
-                row_count=len(result),
-            )
+            async with log_elapsed(logger, "executor.query_completed") as ctx:
+                result = await self._execute_sql(sql)
+                ctx["row_count"] = len(result)
         except Exception as e:
             logger.error("executor.query_failed", error=str(e))
             return {

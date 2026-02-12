@@ -84,7 +84,7 @@ BUSINESS_DATABASE_URL=mysql://root:123456@localhost:3306/your_business_db
 make services-up
 ```
 
-该命令会通过 Docker Compose 启动 MySQL、Redis、etcd、MinIO、Milvus。首次启动需要拉取镜像，耗时较长。
+该命令会通过 Docker Compose 启动 MySQL、Redis、Milvus（含 etcd、MinIO）、Phoenix。首次启动需要拉取镜像，耗时较长。
 
 可通过 `docker compose ps` 确认所有服务状态为 healthy。
 
@@ -168,10 +168,14 @@ make docker-down
 
 ## API 文档
 
-启动后端后访问：
-
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+
+## 可观测性
+
+Phoenix 随基础设施服务一起启动，自动采集 LLM 调用和 Agent 执行链路。
+
+- Phoenix UI: http://localhost:6006
 
 ## License
 

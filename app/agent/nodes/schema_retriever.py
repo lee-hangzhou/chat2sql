@@ -1,5 +1,4 @@
 import asyncio
-import time
 from typing import Any, Dict
 
 from app.agent.states import NL2SQLState
@@ -7,6 +6,7 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.core.retrieval_client import retrieval_client
 from app.schemas.agent import AgentErrorCode
+from app.utils.timing import log_elapsed
 from app.vars.vars import HUMAN_TYPE
 
 
@@ -36,7 +36,7 @@ class SchemaRetriever:
         results = self.retriever.search(
             settings.MILVUS_COLLECTION_NAME,
             data=[embedding],
-            limit=5,
+            limit=3,
             search_params=search_params,
             output_fields=[schema_field],
         )
@@ -68,10 +68,8 @@ class SchemaRetriever:
             }
 
         try:
-            start = time.monotonic()
-            schemas = await asyncio.to_thread(self._search, query)
-            elapsed_ms = (time.monotonic() - start) * 1000
-            logger.info("schema_retriever.search_completed", elapsed_ms=round(elapsed_ms, 1))
+            async with log_elapsed(logger, "schema_retriever.search_completed"):
+                schemas = await asyncio.to_thread(self._search, query)
         except Exception as e:
             logger.error("schema_retriever.search_failed", error=str(e))
             return {

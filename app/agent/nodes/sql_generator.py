@@ -1,4 +1,3 @@
-import time
 from typing import Any, Dict
 
 from app.agent.prompts import ChatPrompt
@@ -7,6 +6,7 @@ from app.core.config import settings
 from app.core.llm import llm
 from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode, SQLResult
+from app.utils.timing import log_elapsed
 from app.vars.prompts import VALIDATION_FEEDBACK_TAG
 
 
@@ -54,10 +54,8 @@ class SQLGenerator:
         prompt_message = ChatPrompt.generate_prompt(**params)
 
         try:
-            start = time.monotonic()
-            result: SQLResult = await self.structured_llm.ainvoke(prompt_message)
-            elapsed_ms = (time.monotonic() - start) * 1000
-            logger.info("sql_generator.llm_completed", elapsed_ms=round(elapsed_ms, 1))
+            async with log_elapsed(logger, "sql_generator.llm_completed"):
+                result: SQLResult = await self.structured_llm.ainvoke(prompt_message)
         except Exception as e:
             logger.error("sql_generator.llm_failed", error=str(e))
             return {

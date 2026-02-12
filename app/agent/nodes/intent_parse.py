@@ -1,4 +1,3 @@
-import time
 from typing import Any, Dict, List
 
 from langchain_core.messages import AIMessage, BaseMessage
@@ -9,6 +8,7 @@ from app.core.config import settings
 from app.core.llm import llm
 from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode, IntentParseResult
+from app.utils.timing import log_elapsed
 from app.vars.prompts import IR_AST_TAG, PERFORMANCE_FEEDBACK_TAG
 from app.vars.vars import HUMAN_TYPE
 
@@ -72,15 +72,10 @@ class IntentParse:
         prompt_messages = ChatPrompt.intent_recognition_prompt(**params)
 
         try:
-            start = time.monotonic()
-            result: IntentParseResult = await self.structured_llm.ainvoke(prompt_messages)
-            elapsed_ms = (time.monotonic() - start) * 1000
-            logger.info(
-                "intent_parse.llm_completed",
-                elapsed_ms=round(elapsed_ms, 1),
-                need_follow_up=result.need_follow_up,
-                need_retry_retrieve=result.need_retry_retrieve,
-            )
+            async with log_elapsed(logger, "intent_parse.llm_completed") as ctx:
+                result: IntentParseResult = await self.structured_llm.ainvoke(prompt_messages)
+                ctx["need_follow_up"] = result.need_follow_up
+                ctx["need_retry_retrieve"] = result.need_retry_retrieve
         except Exception as e:
             logger.error("intent_parse.llm_failed", error=str(e))
             return {

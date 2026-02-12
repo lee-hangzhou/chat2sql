@@ -17,6 +17,7 @@ services:
       - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-chat2sql}@mysql:3306/chat2sql
       - REDIS_URL=redis://redis:6379/0
       - MILVUS_URI=http://milvus-standalone:19530
+      - PHOENIX_COLLECTOR_ENDPOINT=http://phoenix:4317
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-this-secret-key}
     depends_on:
       mysql:
@@ -25,6 +26,22 @@ services:
         condition: service_healthy
       milvus-standalone:
         condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - chat2sql-net
+
+  # Phoenix (可观测性)
+
+  phoenix:
+    image: arizephoenix/phoenix:12.35.0
+    container_name: chat2sql-phoenix
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    volumes:
+      - phoenix_data:/data
+    environment:
+      - PHOENIX_WORKING_DIR=/data
     restart: unless-stopped
     networks:
       - chat2sql-net
@@ -149,6 +166,7 @@ volumes:
   etcd_data:
   minio_data:
   milvus_data:
+  phoenix_data:
 
 networks:
   chat2sql-net:

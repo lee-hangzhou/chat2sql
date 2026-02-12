@@ -10,7 +10,7 @@ help:
 	@echo ""
 	@echo "  Quick Start (local development):"
 	@echo "    make setup          First-time project initialization"
-	@echo "    make services-up    Start infrastructure services (MySQL, Redis, Milvus)"
+	@echo "    make services-up    Start infrastructure services (MySQL, Redis, Milvus, Phoenix)"
 	@echo "    make services-down  Stop infrastructure services"
 	@echo "    make dev            Start backend dev server"
 	@echo "    make fe-dev         Start frontend dev server"
@@ -66,13 +66,13 @@ db-init:
 # 基础设施服务
 
 services-up:
-	docker compose up -d mysql redis etcd minio milvus-standalone
+	docker compose up -d mysql redis etcd minio milvus-standalone phoenix
 	@echo "Waiting for services to be healthy..."
 	@docker compose ps
 
 services-down:
-	docker compose stop mysql redis etcd minio milvus-standalone
-	docker compose rm -f mysql redis etcd minio milvus-standalone
+	docker compose stop mysql redis etcd minio milvus-standalone phoenix
+	docker compose rm -f mysql redis etcd minio milvus-standalone phoenix
 	@echo "Infrastructure services stopped."
 
 # 后端

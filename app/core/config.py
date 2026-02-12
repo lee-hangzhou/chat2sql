@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key，本地模型填任意非空值如 ollama")
     OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI 模型名")
     OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，留空则使用 OpenAI 官方地址")
+    LLM_TIMEOUT: int = Field(default=120, description="LLM 单次请求超时时间（秒）")
     LLM_MAX_RETRIES: int = Field(default=3, description="LLM HTTP 层重试次数（网络错误、限流等）")
     LLM_RETRY_ATTEMPTS: int = Field(default=3, description="LLM structured output 应用层重试次数")
     AGENT_RECURSION_LIMIT: int = Field(default=25, description="LangGraph 单次调用最大节点执行次数")
@@ -75,6 +76,9 @@ class Settings(BaseSettings):
     MILVUS_COLLECTION_NAME: str = Field(default="table_schemas", description="Milvus 集合名称")
     MILVUS_SCHEMA_FIELD: str = Field(default="table_schema", description="Milvus 中存储表结构的标量字段名")
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
+
+    # Phoenix (可观测性)
+    PHOENIX_COLLECTOR_ENDPOINT: str = Field(default="http://localhost:4317", description="Phoenix OTLP gRPC 采集端点")
 
     @property
     def cors_origins_list(self) -> List[str]:
