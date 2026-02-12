@@ -36,7 +36,7 @@ class SchemaRetriever:
         results = self.retriever.search(
             settings.MILVUS_COLLECTION_NAME,
             data=[embedding],
-            limit=3,
+            limit=settings.MILVUS_SEARCH_LIMIT,
             search_params=search_params,
             output_fields=[schema_field],
         )

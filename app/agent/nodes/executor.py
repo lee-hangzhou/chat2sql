@@ -1,7 +1,5 @@
 from typing import Any, Dict, List
 
-from langchain_core.messages import AIMessage
-
 from app.agent.states import NL2SQLState
 from app.core.config import settings
 from app.core.database import business_db
@@ -57,5 +55,4 @@ class Executor:
         return {
             "execute_result": result,
             "is_success": True,
-            "messages": [AIMessage(content=f"```sql\n{sql}\n```")],
         }

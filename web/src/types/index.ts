@@ -57,6 +57,7 @@ export interface Conversation {
 export interface Message {
   role: 'user' | 'assistant'
   content: string
+  executeResult?: Record<string, unknown>[] | null
 }
 
 export interface ConversationDetail {
@@ -105,6 +106,7 @@ export interface SSEFollowUp {
 
 export interface SSEResult {
   sql: string | null
+  summary: string | null
   execute_result: Record<string, unknown>[] | null
 }
 

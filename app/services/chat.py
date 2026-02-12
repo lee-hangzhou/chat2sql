@@ -191,10 +191,18 @@ class ChatService:
                         sql = getattr(sql_result, "sql", None) or sql_result.get(
                             "sql"
                         )
+                    msgs = values.get("messages", [])
+                    summary = ""
+                    for msg in reversed(msgs):
+                        if msg.type != HUMAN_TYPE and msg.content:
+                            summary = msg.content
+                            break
+
                     yield self._sse_event(
                         "result",
                         {
                             "sql": sql,
+                            "summary": summary,
                             "execute_result": self._stringify_rows(values.get("execute_result")),
                         },
                     )

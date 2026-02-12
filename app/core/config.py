@@ -65,16 +65,19 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API Key，本地模型填任意非空值如 ollama")
     OPENAI_MODEL: str = Field(default="gpt-4o-mini", description="OpenAI 模型名")
     OPENAI_BASE_URL: Optional[str] = Field(default=None, description="OpenAI 兼容 API 的 base_url，留空则使用 OpenAI 官方地址")
-    LLM_TIMEOUT: int = Field(default=120, description="LLM 单次请求超时时间（秒）")
+    LLM_TIMEOUT: int = Field(default=300, description="LLM 单次请求超时时间（秒）")
     LLM_MAX_RETRIES: int = Field(default=3, description="LLM HTTP 层重试次数（网络错误、限流等）")
     LLM_RETRY_ATTEMPTS: int = Field(default=3, description="LLM structured output 应用层重试次数")
     AGENT_RECURSION_LIMIT: int = Field(default=25, description="LangGraph 单次调用最大节点执行次数")
     AGENT_MAX_MESSAGE_PAIRS: int = Field(default=5, description="Prompt 中保留的最大消息轮数")
+    SQL_CANDIDATE_COUNT: int = Field(default=2, description="SQL 候选生成数量")
+    SQL_CANDIDATE_TEMPERATURE: float = Field(default=0.7, description="SQL 候选生成温度（需 > 0 以产生多样性）")
 
     # Milvus
     MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")
     MILVUS_COLLECTION_NAME: str = Field(default="table_schemas", description="Milvus 集合名称")
     MILVUS_SCHEMA_FIELD: str = Field(default="table_schema", description="Milvus 中存储表结构的标量字段名")
+    MILVUS_SEARCH_LIMIT: int = Field(default=10, description="Milvus 向量检索返回的最大表结构数量")
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
 
     # Phoenix (可观测性)

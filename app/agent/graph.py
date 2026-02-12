@@ -8,8 +8,11 @@ from langgraph.graph import StateGraph, START, END
 from app.agent.nodes.executor import Executor
 from app.agent.nodes.follow_up import FollowUp
 from app.agent.nodes.intent_parse import IntentParse
+from app.agent.nodes.result_summarizer import ResultSummarizer
 from app.agent.nodes.schema_retriever import SchemaRetriever
 from app.agent.nodes.sql_generator import SQLGenerator
+from app.agent.nodes.sql_judge import SQLJudge
+from app.agent.nodes.sql_selector import SQLSelector
 from app.agent.nodes.sql_validator import SQLValidator
 from app.agent.states import NL2SQLState
 from app.core.config import CheckpointerType, settings
@@ -20,24 +23,22 @@ INTENT_PARSE = "intent_parse"
 FOLLOW_UP = "follow_up"
 SQL_GENERATOR = "sql_generator"
 SQL_VALIDATOR = "sql_validator"
+SQL_SELECTOR = "sql_selector"
+SQL_JUDGE = "sql_judge"
 EXECUTOR = "executor"
+RESULT_SUMMARIZER = "result_summarizer"
 
 
 def route_after_schema_retriever(state: NL2SQLState) -> str:
-    """Schema 检索后的路由：失败则终止"""
     if state.is_success is False:
         return END
     return INTENT_PARSE
 
 
 def route_after_intent_parse(state: NL2SQLState) -> str:
-    """意图解析后的路由：失败终止 / 重新检索 / 追问 / 生成 SQL
-
-    优先级：schema_retry > follow_up > sql_generator
-    """
+    """优先级：schema_retry > follow_up > sql_generator"""
     if state.is_success is False:
         return END
-
     result = state.intent_parse_result
     if result.need_retry_retrieve:
         return SCHEMA_RETRIEVER
@@ -47,32 +48,53 @@ def route_after_intent_parse(state: NL2SQLState) -> str:
 
 
 def route_after_follow_up(state: NL2SQLState) -> str:
-    """追问后的路由：超出上限则终止"""
     if state.is_success is False:
         return END
     return INTENT_PARSE
 
 
 def route_after_sql_generator(state: NL2SQLState) -> str:
-    """SQL 生成后的路由：失败则终止"""
     if state.is_success is False:
         return END
     return SQL_VALIDATOR
 
 
 def route_after_validate(state: NL2SQLState) -> str:
-    """SQL 校验后的路由：超过重试上限终止 / 语法错误 / 表字段错误 / 性能问题 / 通过"""
+    """校验后路由：有合法候选 → 选优；仲裁候选失败但有历史结果 → 裁决；否则重试"""
     if state.is_success is False:
         return END
+    if state.validated_candidates:
+        return SQL_SELECTOR
+    if state.candidate_exec_results:
+        return SQL_JUDGE
     if state.retry_count >= settings.AGENT_MAX_RETRIES:
         return END
     if state.syntax_result and not state.syntax_result.is_ok:
         return SQL_GENERATOR
     if state.explain_error:
         return SCHEMA_RETRIEVER
-    if state.performance_result and not state.performance_result.is_ok:
-        return INTENT_PARSE
+    return END
+
+
+def route_after_selector(state: NL2SQLState) -> str:
+    """选优后路由：仲裁 → 生成；有结果 → 执行；无结果 → 裁决"""
+    if state.needs_arbitration:
+        return SQL_GENERATOR
+    if state.sql_result:
+        return EXECUTOR
+    return SQL_JUDGE
+
+
+def route_after_judge(state: NL2SQLState) -> str:
+    if state.is_success is False:
+        return END
     return EXECUTOR
+
+
+def route_after_executor(state: NL2SQLState) -> str:
+    if state.is_success is False:
+        return END
+    return RESULT_SUMMARIZER
 
 
 @contextmanager
@@ -105,7 +127,10 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node(FOLLOW_UP, FollowUp())
     graph.add_node(SQL_GENERATOR, SQLGenerator())
     graph.add_node(SQL_VALIDATOR, SQLValidator())
+    graph.add_node(SQL_SELECTOR, SQLSelector())
+    graph.add_node(SQL_JUDGE, SQLJudge())
     graph.add_node(EXECUTOR, Executor())
+    graph.add_node(RESULT_SUMMARIZER, ResultSummarizer())
 
     graph.add_edge(START, SCHEMA_RETRIEVER)
     graph.add_conditional_edges(SCHEMA_RETRIEVER, route_after_schema_retriever)
@@ -113,6 +138,9 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     graph.add_conditional_edges(FOLLOW_UP, route_after_follow_up)
     graph.add_conditional_edges(SQL_GENERATOR, route_after_sql_generator)
     graph.add_conditional_edges(SQL_VALIDATOR, route_after_validate)
-    graph.add_edge(EXECUTOR, END)
+    graph.add_conditional_edges(SQL_SELECTOR, route_after_selector)
+    graph.add_conditional_edges(SQL_JUDGE, route_after_judge)
+    graph.add_conditional_edges(EXECUTOR, route_after_executor)
+    graph.add_edge(RESULT_SUMMARIZER, END)
 
     return graph.compile(checkpointer=checkpointer)

@@ -4,7 +4,10 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
 
-from app.schemas.agent import AgentErrorCode, IntentParseResult, PerformanceResult, SQLResult, SyntaxResult
+from app.schemas.agent import (
+    AgentErrorCode, CandidateExecResult, IntentParseResult,
+    PerformanceResult, SQLResult, SyntaxResult, ValidatedCandidate,
+)
 
 
 def merge_schemas(existing: List[str], new: List[str]) -> List[str]:
@@ -19,7 +22,11 @@ class NL2SQLState(BaseModel):
     schemas: Annotated[List[str], merge_schemas] = Field(default_factory=list, description="检索的表结构列表")
     intent_parse_result: Optional[IntentParseResult] = Field(default=None, description="格式化的意图解析")
     messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list, description="对话消息记录")
-    sql_result: Optional[SQLResult] = Field(default=None, description="生成的SQL语句")
+    sql_candidates: List[SQLResult] = Field(default_factory=list, description="SQL 候选列表，由 sql_generator 生成")
+    validated_candidates: List[ValidatedCandidate] = Field(default_factory=list, description="通过校验的候选，由 sql_validator 写入")
+    candidate_exec_results: List[CandidateExecResult] = Field(default_factory=list, description="已执行候选的比对结果，由 sql_selector 写入")
+    sql_result: Optional[SQLResult] = Field(default=None, description="选优后的最终 SQL")
+    needs_arbitration: bool = Field(default=False, description="结果不一致，需要仲裁")
 
     # 循环计数
     retry_count: int = Field(default=0, description="SQL 校验失败重试次数")

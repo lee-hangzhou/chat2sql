@@ -59,15 +59,14 @@ interface Props {
   messages: Message[]
   currentNode: string | null
   sending: boolean
-  executeResult: Record<string, unknown>[] | null
 }
 
-export default function MessageList({ messages, currentNode, sending, executeResult }: Props) {
+export default function MessageList({ messages, currentNode, sending }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, currentNode, executeResult])
+  }, [messages, currentNode])
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -83,22 +82,22 @@ export default function MessageList({ messages, currentNode, sending, executeRes
               </div>
             </div>
           ) : (
-            <div key={i} className="flex gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                <Bot size={18} />
+            <div key={i}>
+              <div className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                  <Bot size={18} />
+                </div>
+                <div className="min-w-0 flex-1 text-sm leading-relaxed text-gray-800 chat-markdown">
+                  <Markdown components={{ code: CodeBlock }}>{msg.content}</Markdown>
+                </div>
               </div>
-              <div className="min-w-0 flex-1 text-sm leading-relaxed text-gray-800 chat-markdown">
-                <Markdown components={{ code: CodeBlock }}>{msg.content}</Markdown>
-              </div>
+              {msg.executeResult && msg.executeResult.length > 0 && (
+                <div className="ml-11 mt-3">
+                  <ResultTable data={msg.executeResult} />
+                </div>
+              )}
             </div>
           )
-        )}
-
-        {/* 查询结果表格 */}
-        {executeResult && executeResult.length > 0 && (
-          <div className="ml-11">
-            <ResultTable data={executeResult} />
-          </div>
         )}
 
         {/* 执行进度指示 */}

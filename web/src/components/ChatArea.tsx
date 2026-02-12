@@ -13,7 +13,6 @@ export default function ChatArea() {
     currentNode,
     nodeSteps,
     sending,
-    executeResult,
     sendMessage,
   } = useChatStore()
 
@@ -50,7 +49,6 @@ export default function ChatArea() {
           messages={messages}
           currentNode={currentNode}
           sending={sending}
-          executeResult={executeResult}
         />
 
         <MessageInput

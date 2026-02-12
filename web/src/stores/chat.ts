@@ -9,6 +9,10 @@ import type {
   SSEResult,
 } from '../types'
 
+const FALLBACK_RESULT_MSG = '查询完成'
+const FALLBACK_ERROR_MSG = '执行出错，请重试'
+const FALLBACK_NETWORK_ERROR = '网络错误'
+
 /** 节点名称到中文标签的映射 */
 const NODE_LABELS: Record<string, string> = {
   schema_retriever: '检索表结构',
@@ -16,7 +20,10 @@ const NODE_LABELS: Record<string, string> = {
   follow_up: '追问确认',
   sql_generator: '生成 SQL',
   sql_validator: '校验 SQL',
+  sql_selector: '选优 SQL',
+  sql_judge: '语义裁决',
   executor: '执行查询',
+  result_summarizer: '总结结果',
 }
 
 interface ChatState {
@@ -46,12 +53,25 @@ interface ChatState {
   reset: () => void
 }
 
-/** 将所有 running 状态的节点标记为 failed 并计算最终耗时 */
-function failRunningSteps(steps: NodeStep[]): NodeStep[] {
+/** 标记失败：running 节点标红，若无 running 则将最后一个 completed 节点标红 */
+function failStepsOnError(steps: NodeStep[]): NodeStep[] {
   const now = Date.now()
-  return steps.map((step) =>
-    step.status === 'running'
-      ? { ...step, status: 'failed' as const, elapsedMs: now - step.startTime }
+  const hasRunning = steps.some((s) => s.status === 'running')
+
+  if (hasRunning) {
+    return steps.map((step) =>
+      step.status === 'running'
+        ? { ...step, status: 'failed' as const, elapsedMs: now - step.startTime }
+        : step
+    )
+  }
+
+  const lastCompletedIdx = steps.findLastIndex((s) => s.status === 'completed')
+  if (lastCompletedIdx === -1) return steps
+
+  return steps.map((step, i) =>
+    i === lastCompletedIdx
+      ? { ...step, status: 'failed' as const }
       : step
   )
 }
@@ -109,8 +129,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })
     try {
       const detail = await chatApi.getConversationDetail(id)
+      const msgs = detail.messages
+      if (detail.execute_result && msgs.length > 0) {
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].role === 'assistant' && msgs[i].content.includes('```sql')) {
+            msgs[i] = { ...msgs[i], executeResult: detail.execute_result }
+            break
+          }
+        }
+      }
       set({
-        messages: detail.messages,
+        messages: msgs,
         sqlResult: detail.sql,
         executeResult: detail.execute_result,
         errorMessage: detail.error_message,
@@ -148,12 +177,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { activeId } = get()
     if (!activeId) return
 
-    // 乐观追加用户消息
+    const isFollowUpReply = !!get().followUpQuestion
+
+    // 乐观追加用户消息，追问回复时保留已有节点进度
     set((s) => ({
       messages: [...s.messages, { role: 'user' as const, content }],
       sending: true,
       currentNode: null,
-      nodeSteps: [],
+      nodeSteps: isFollowUpReply ? s.nodeSteps : [],
       followUpQuestion: null,
       sqlResult: null,
       executeResult: null,
@@ -208,15 +239,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
             break
           }
           case 'result': {
-            const { sql, execute_result } = data as unknown as SSEResult
-            const resultMsg = sql ? `\`\`\`sql\n${sql}\n\`\`\`` : '查询完成'
+            const { sql, summary, execute_result } = data as unknown as SSEResult
+            const content = summary || (sql ? `\`\`\`sql\n${sql}\n\`\`\`` : FALLBACK_RESULT_MSG)
             set({
               sqlResult: sql,
               executeResult: execute_result,
               currentNode: null,
               messages: [
                 ...get().messages,
-                { role: 'assistant', content: resultMsg },
+                { role: 'assistant', content, executeResult: execute_result },
               ],
             })
             break
@@ -229,10 +260,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
             set((s) => ({
               errorMessage: error_message || null,
               currentNode: null,
-              nodeSteps: failRunningSteps(s.nodeSteps),
+              nodeSteps: failStepsOnError(s.nodeSteps),
               messages: [
                 ...get().messages,
-                { role: 'assistant', content: '执行出错，请重试' },
+                { role: 'assistant', content: FALLBACK_ERROR_MSG },
               ],
             }))
             break
@@ -243,9 +274,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     } catch (e) {
       set((s) => ({
-        errorMessage: e instanceof Error ? e.message : '网络错误',
+        errorMessage: e instanceof Error ? e.message : FALLBACK_NETWORK_ERROR,
         currentNode: null,
-        nodeSteps: failRunningSteps(s.nodeSteps),
+        nodeSteps: failStepsOnError(s.nodeSteps),
       }))
     } finally {
       set({ sending: false })

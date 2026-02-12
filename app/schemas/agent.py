@@ -1,9 +1,7 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-
-from app.schemas.ast import QueryElement
 
 
 class DatabaseType(str, Enum):
@@ -23,24 +21,27 @@ class AgentErrorCode(str, Enum):
     NO_SCHEMA_RESULTS = ("no_schema_results", "未检索到匹配的表结构")
     SCHEMA_RETRY_LIMIT = ("schema_retry_limit", "Schema 检索次数已达上限")
     FOLLOW_UP_LIMIT = ("follow_up_limit", "追问次数已达上限")
-    NO_IR_AST = ("no_ir_ast", "意图解析未产出中间表示，无法生成 SQL")
     NO_SQL = ("no_sql", "SQL 结果为空")
     ONLY_SELECT = ("only_select", "仅允许 SELECT 语句")
     LLM_ERROR = ("llm_error", "LLM 调用失败")
     RETRIEVAL_ERROR = ("retrieval_error", "向量检索失败")
     EXECUTION_ERROR = ("execution_error", "SQL 执行失败")
     VALIDATION_RETRY_LIMIT = ("validation_retry_limit", "SQL 校验重试次数已达上限")
+    VALIDATION_ALL_FAILED = ("validation_all_failed", "所有候选均校验失败")
 
 
 class IntentParseResult(BaseModel):
     need_follow_up: Optional[bool] = Field(default=None, description="是否需要追问")
     need_retry_retrieve: Optional[bool] = Field(default=None, description="是否需要重新检索schema")
-    ir_ast: Optional[QueryElement] = Field(default=None, description="中间表示的抽象语法树")
     follow_up_question: Optional[str] = Field(default=None, description="追问的问题")
 
 
 class SQLResult(BaseModel):
     sql: Optional[str] = Field(default=None, description="生成的SQL语句")
+
+
+class JudgeResult(BaseModel):
+    choice: int = Field(..., description="被选中候选的序号（从 1 开始）")
 
 
 class SyntaxResult(BaseModel):
@@ -71,5 +72,16 @@ class PerformanceResult(BaseModel):
 
 
 class ExecuteExplainResult(BaseModel):
-    error:Optional[str] = Field(default=None,description="执行explain错误信息")
-    explains:List[Explain] = Field(default_factory=list,description="执行explain的结果")
+    error: Optional[str] = Field(default=None, description="执行explain错误信息")
+    explains: List[Explain] = Field(default_factory=list, description="执行explain的结果")
+
+
+class ValidatedCandidate(BaseModel):
+    sql: str = Field(..., description="SQL 语句")
+    explains: List[Explain] = Field(default_factory=list, description="EXPLAIN 执行计划")
+
+
+class CandidateExecResult(BaseModel):
+    sql: str = Field(..., description="SQL 语句")
+    explains: List[Explain] = Field(default_factory=list, description="EXPLAIN 执行计划")
+    exec_result: List[Dict[str, Any]] = Field(default_factory=list, description="执行结果样本")
