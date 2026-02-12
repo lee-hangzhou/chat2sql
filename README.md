@@ -1,12 +1,37 @@
 # chat2sql
 
-基于 LangGraph 的 NL2SQL Agent，支持多轮对话、Schema 检索、SQL 生成与校验执行。
+基于 LangGraph 的 NL2SQL Agent，支持多轮对话、Schema 检索、多候选 SQL 生成与选优、校验执行。
+
+后端项目结构基于 [FastScaff](https://github.com/lee-hangzhou/fastscaff) 脚手架生成。
 
 ## 技术栈
 
-**后端:** FastAPI, LangGraph, Tortoise ORM, LangChain, Milvus, MySQL, Redis
+**后端:** FastAPI, LangGraph, LangChain, Tortoise ORM, Milvus, MySQL, Redis
 
 **前端:** React, TypeScript, Vite, Tailwind CSS, Zustand
+
+**可观测性:** Arize Phoenix (OpenTelemetry)
+
+## Agent 流程
+
+```
+schema_retriever → intent_parse → follow_up（可选，挂起等待用户回复）
+                                ↘ sql_generator → sql_validator → sql_selector
+                                                                   ↙         ↘
+                                                       sql_generator(仲裁)   sql_judge
+                                                                   ↘         ↙
+                                                                 executor → result_summarizer
+```
+
+- **schema_retriever**: 基于 Milvus 向量检索匹配的表结构
+- **intent_parse**: LLM 判断用户意图是否明确、Schema 是否充足
+- **follow_up**: 意图不明确时挂起等待用户补充信息
+- **sql_generator**: 并发生成多条候选 SQL
+- **sql_validator**: 语法校验 + EXPLAIN 验证 + 性能分析
+- **sql_selector**: 执行候选并比对结果集，多数投票选优；无多数时触发仲裁
+- **sql_judge**: LLM 语义裁决，从结果不一致的候选中选择最优
+- **executor**: 执行最终 SQL
+- **result_summarizer**: LLM 根据用户问题和查询结果生成自然语言总结
 
 ## 项目结构
 
@@ -14,14 +39,19 @@
 chat2sql/
 ├── app/                    # 后端
 │   ├── main.py
-│   ├── agent/              # NL2SQL Agent（nodes / graph / states / prompts）
+│   ├── agent/              # NL2SQL Agent
+│   │   ├── graph.py        # LangGraph 流程定义
+│   │   ├── states.py       # 全局状态
+│   │   ├── prompts.py      # Prompt 模板构建
+│   │   └── nodes/          # 各节点实现
 │   ├── api/v1/endpoints/   # API 接口
 │   ├── core/               # 配置、数据库、安全、LLM、日志
 │   ├── models/             # Tortoise ORM 模型
 │   ├── schemas/            # Pydantic 模型
 │   ├── repositories/       # 数据访问层
 │   ├── services/           # 业务逻辑层
-│   ├── middleware/         # JWT、日志、安全中间件
+│   ├── middleware/         # JWT、日志、安全、Tracing 中间件
+│   ├── utils/              # 公共工具（消息裁剪、计时等）
 │   └── exceptions/         # 异常定义
 ├── web/                    # 前端（React）
 ├── docker-compose.yml
@@ -59,24 +89,25 @@ make setup
 
 **2. 编辑配置**
 
-打开 `.env`，根据你的 LLM 使用方式配置：
+打开 `.env`，以下两项**必须配置**，否则无法正常运行：
 
 ```bash
-# 使用 OpenAI
+# [必填] LLM 配置 — 二选一
+
+# 方式一：OpenAI 等云服务
 OPENAI_API_KEY=sk-xxxx
 OPENAI_MODEL=gpt-4o-mini
 
-# 使用 Ollama 等本地模型
-# openai 客户端库要求 API Key 非空，填任意值即可，Ollama 会忽略
-OPENAI_API_KEY=ollama
-OPENAI_BASE_URL=http://localhost:11434/v1
-OPENAI_MODEL=qwen3:8b
+# 方式二：Ollama 等本地模型
+# OPENAI_API_KEY=ollama
+# OPENAI_BASE_URL=http://localhost:11434/v1
+# OPENAI_MODEL=qwen3:8b
 
-# 业务数据库（NL2SQL 的查询目标库）
+# [必填] 业务数据库 — 替换为你实际要查询的数据库地址
 BUSINESS_DATABASE_URL=mysql://root:123456@localhost:3306/your_business_db
 ```
 
-其他配置项均有默认值，参见 `.env.example`。
+其他配置项均有合理默认值，参见 `.env.example`。生产环境务必修改 `JWT_SECRET_KEY`。
 
 **3. 启动基础设施服务**
 
@@ -112,7 +143,16 @@ make fe-dev
 
 前端默认运行在 http://localhost:3000 。
 
-**7. 停止基础设施服务**
+**7. 同步业务库表结构**
+
+首次使用前，需要将业务数据库的表结构灌入 Milvus 向量库，Agent 才能检索到可用的表。可以通过前端界面点击「同步 Schema」按钮，或直接调用接口：
+
+```bash
+curl -X POST http://localhost:8000/api/v1/chat/schema/sync \
+  -H "Authorization: Bearer <token>"
+```
+
+**8. 停止基础设施服务**
 
 ```bash
 make services-down
