@@ -13,14 +13,26 @@ from app.schemas.agent import AgentErrorCode, ExecuteExplainResult, Explain, Per
 
 class SQLValidator:
 
-    # SQL 层面的错误码：可通过重新生成 SQL 来修复
-    _SQL_ERROR_CODES = frozenset({
-        1054,  # Unknown column
-        1064,  # SQL syntax error
-        1052,  # Column is ambiguous
-        1109,  # Unknown table in field list
-        1146,  # Table doesn't exist
-        1176,  # Key column doesn't exist in table
+    # 系统级错误码：连接、权限、资源等不可通过重新生成 SQL 修复的错误，必须向上抛出
+    # 不在此集合中的 OperationalError 一律视为 SQL 语法/语义错误，交由上游重试
+    _SYSTEM_ERROR_CODES = frozenset({
+        1040,  # Too many connections
+        1041,  # Out of memory
+        1042,  # Can't get hostname for your address
+        1043,  # Bad handshake
+        1044,  # Access denied for user to database
+        1045,  # Access denied for user (using password)
+        1080,  # Forcing close of thread
+        1152,  # Aborted connection
+        1153,  # Got a packet bigger than max_allowed_packet
+        1154,  # Got a read error from the connection pipe
+        1155,  # Got a write error from the connection pipe
+        1156,  # Got timeout from master
+        1157,  # Net packets out of order
+        1158,  # Couldn't uncompress communication packet
+        1159,  # Got timeout reading communication packets
+        1160,  # Got error writing communication packets
+        1161,  # Got timeout writing communication packets
     })
 
     # EXPLAIN join_type 常量
@@ -86,11 +98,10 @@ class SQLValidator:
 
         except OperationalError as e:
             error_code = self._extract_error_code(e)
-            if error_code in self._SQL_ERROR_CODES:
-                # SQL 层面错误，记录后交由上游节点重新生成 SQL
-                return ExecuteExplainResult(error=str(e))
-            # 系统层面错误（权限、连接、配置等），向上抛出
-            raise
+            if error_code is not None and error_code in self._SYSTEM_ERROR_CODES:
+                raise
+            # SQL 语法/语义错误，交由上游节点重新生成 SQL
+            return ExecuteExplainResult(error=str(e))
 
     def _parse_explain(self, explain_result: ExecuteExplainResult) -> PerformanceResult:
         """分析 EXPLAIN 执行计划，校验是否存在性能问题"""

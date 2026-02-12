@@ -26,4 +26,5 @@ class FollowUp:
         return {
             "messages": [HumanMessage(content=user_reply)],
             "follow_up_count": state.follow_up_count + 1,
+            "schema_retry_count": 0,
         }

@@ -3,6 +3,7 @@ import * as chatApi from '../api/chat'
 import type {
   Conversation,
   Message,
+  NodeStep,
   SSEError,
   SSEFollowUp,
   SSEResult,
@@ -24,6 +25,8 @@ interface ChatState {
   messages: Message[]
   /** 当前 graph 执行到的节点（用于展示进度） */
   currentNode: string | null
+  /** 节点执行步骤列表（仅追加已触发的节点） */
+  nodeSteps: NodeStep[]
   /** 追问问题 */
   followUpQuestion: string | null
   /** SQL 结果 */
@@ -43,11 +46,22 @@ interface ChatState {
   reset: () => void
 }
 
+/** 将所有 running 状态的节点标记为 failed 并计算最终耗时 */
+function failRunningSteps(steps: NodeStep[]): NodeStep[] {
+  const now = Date.now()
+  return steps.map((step) =>
+    step.status === 'running'
+      ? { ...step, status: 'failed' as const, elapsedMs: now - step.startTime }
+      : step
+  )
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: [],
   activeId: null,
   messages: [],
   currentNode: null,
+  nodeSteps: [],
   followUpQuestion: null,
   sqlResult: null,
   executeResult: null,
@@ -72,6 +86,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeId: conv.id,
       messages: [],
       currentNode: null,
+      nodeSteps: [],
       followUpQuestion: null,
       sqlResult: null,
       executeResult: null,
@@ -85,6 +100,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeId: id,
       messages: [],
       currentNode: null,
+      nodeSteps: [],
       followUpQuestion: null,
       sqlResult: null,
       executeResult: null,
@@ -117,6 +133,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               activeId: null,
               messages: [],
               currentNode: null,
+              nodeSteps: [],
               followUpQuestion: null,
               sqlResult: null,
               executeResult: null,
@@ -136,6 +153,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [...s.messages, { role: 'user' as const, content }],
       sending: true,
       currentNode: null,
+      nodeSteps: [],
       followUpQuestion: null,
       sqlResult: null,
       executeResult: null,
@@ -146,9 +164,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const stream = chatApi.sendMessageStream(activeId, content)
       for await (const { event, data } of stream) {
         switch (event) {
+          case 'node_start': {
+            const nodeName = (data as unknown as { node: string }).node
+            const label = NODE_LABELS[nodeName] || nodeName
+            set((s) => ({
+              currentNode: label,
+              nodeSteps: [
+                ...s.nodeSteps,
+                {
+                  node: nodeName,
+                  label,
+                  status: 'running',
+                  startTime: Date.now(),
+                  elapsedMs: null,
+                },
+              ],
+            }))
+            break
+          }
           case 'node_complete': {
             const nodeName = (data as unknown as { node: string }).node
-            set({ currentNode: NODE_LABELS[nodeName] || nodeName })
+            const now = Date.now()
+            set((s) => ({
+              currentNode: null,
+              nodeSteps: s.nodeSteps.map((step) =>
+                step.node === nodeName && step.status === 'running'
+                  ? { ...step, status: 'completed', elapsedMs: now - step.startTime }
+                  : step
+              ),
+            }))
             break
           }
           case 'follow_up': {
@@ -182,14 +226,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
             if (error_message) {
               console.error('[chat] agent error:', error_message)
             }
-            set({
+            set((s) => ({
               errorMessage: error_message || null,
               currentNode: null,
+              nodeSteps: failRunningSteps(s.nodeSteps),
               messages: [
                 ...get().messages,
                 { role: 'assistant', content: '执行出错，请重试' },
               ],
-            })
+            }))
             break
           }
           case 'done':
@@ -197,10 +242,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
     } catch (e) {
-      set({
+      set((s) => ({
         errorMessage: e instanceof Error ? e.message : '网络错误',
         currentNode: null,
-      })
+        nodeSteps: failRunningSteps(s.nodeSteps),
+      }))
     } finally {
       set({ sending: false })
       // 刷新对话列表以更新标题和状态
@@ -214,6 +260,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       activeId: null,
       messages: [],
       currentNode: null,
+      nodeSteps: [],
       followUpQuestion: null,
       sqlResult: null,
       executeResult: null,

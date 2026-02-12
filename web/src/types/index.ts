@@ -77,7 +77,23 @@ export interface SchemaSyncResult {
   table_count: number
 }
 
+/* ---- Node Progress ---- */
+
+export type NodeStatus = 'running' | 'completed' | 'failed'
+
+export interface NodeStep {
+  node: string
+  label: string
+  status: NodeStatus
+  startTime: number
+  elapsedMs: number | null
+}
+
 /* ---- SSE Events ---- */
+
+export interface SSENodeStart {
+  node: string
+}
 
 export interface SSENodeComplete {
   node: string

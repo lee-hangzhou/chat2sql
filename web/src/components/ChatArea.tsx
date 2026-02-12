@@ -3,6 +3,7 @@ import { useChatStore } from '../stores/chat'
 import { useAuthStore } from '../stores/auth'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
+import NodeProgress from './NodeProgress'
 
 export default function ChatArea() {
   const { isAuthenticated } = useAuthStore()
@@ -10,6 +11,7 @@ export default function ChatArea() {
     activeId,
     messages,
     currentNode,
+    nodeSteps,
     sending,
     executeResult,
     sendMessage,
@@ -38,22 +40,35 @@ export default function ChatArea() {
     )
   }
 
-  return (
-    <div className="flex flex-1 flex-col bg-[var(--color-chat-bg)]">
-      <MessageList
-        messages={messages}
-        currentNode={currentNode}
-        sending={sending}
-        executeResult={executeResult}
-      />
+  const showProgress = nodeSteps.length > 0
 
-      <MessageInput
-        onSend={sendMessage}
-        disabled={sending}
-        placeholder={
-          sending ? '正在处理中...' : '输入你的问题，按 Enter 发送'
-        }
-      />
+  return (
+    <div className="flex flex-1 overflow-hidden bg-[var(--color-chat-bg)]">
+      {/* 对话区域 */}
+      <div className="flex flex-1 flex-col min-w-0">
+        <MessageList
+          messages={messages}
+          currentNode={currentNode}
+          sending={sending}
+          executeResult={executeResult}
+        />
+
+        <MessageInput
+          onSend={sendMessage}
+          disabled={sending}
+          placeholder={
+            sending ? '正在处理中...' : '输入你的问题，按 Enter 发送'
+          }
+        />
+      </div>
+
+      {/* 节点进度面板 */}
+      {showProgress && (
+        <div className="w-64 shrink-0 border-l border-gray-200 bg-white p-4 overflow-y-auto">
+          <h3 className="mb-4 text-sm font-medium text-gray-500">执行进度</h3>
+          <NodeProgress steps={nodeSteps} />
+        </div>
+      )}
     </div>
   )
 }

@@ -137,6 +137,8 @@ class ChatService:
 
 
 
+    _INTERNAL_NODES = {"__start__", "__end__"}
+
     async def _stream_graph(
         self,
         graph: CompiledStateGraph,
@@ -146,10 +148,19 @@ class ChatService:
     ) -> AsyncGenerator[str, None]:
         """执行 graph 并以 SSE 事件流形式逐步返回节点执行进度与最终结果"""
         try:
-            async for event in graph.astream(
-                input_data, config, stream_mode="updates"
+            async for chunk in graph.astream(
+                input_data, config, stream_mode="debug"
             ):
-                for node_name in event:
+                chunk_type = chunk.get("type")
+                payload = chunk.get("payload", {})
+                node_name = payload.get("name", "")
+
+                if node_name in self._INTERNAL_NODES:
+                    continue
+
+                if chunk_type == "task":
+                    yield self._sse_event("node_start", {"node": node_name})
+                elif chunk_type == "task_result":
                     yield self._sse_event("node_complete", {"node": node_name})
 
             # graph 执行结束，判断终态
