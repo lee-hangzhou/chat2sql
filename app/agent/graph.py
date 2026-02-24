@@ -6,6 +6,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 
+from app.agent.nodes.chart_advisor import ChartAdvisor
 from app.agent.nodes.executor import Executor
 from app.agent.nodes.follow_up import FollowUp
 from app.agent.nodes.intent_parse import IntentParse
@@ -28,6 +29,7 @@ SQL_VALIDATOR = "sql_validator"
 SQL_SELECTOR = "sql_selector"
 SQL_JUDGE = "sql_judge"
 EXECUTOR = "executor"
+CHART_ADVISOR = "chart_advisor"
 RESULT_SUMMARIZER = "result_summarizer"
 
 
@@ -96,7 +98,7 @@ def route_after_judge(state: NL2SQLState) -> str:
 def route_after_executor(state: NL2SQLState) -> str:
     if state.is_success is False:
         return END
-    return RESULT_SUMMARIZER
+    return CHART_ADVISOR
 
 
 @asynccontextmanager
@@ -139,6 +141,7 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node(SQL_SELECTOR, SQLSelector())
     graph.add_node(SQL_JUDGE, SQLJudge())
     graph.add_node(EXECUTOR, Executor())
+    graph.add_node(CHART_ADVISOR, ChartAdvisor())
     graph.add_node(RESULT_SUMMARIZER, ResultSummarizer())
 
     graph.add_edge(START, SUMMARIZE)
@@ -151,6 +154,7 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     graph.add_conditional_edges(SQL_SELECTOR, route_after_selector)
     graph.add_conditional_edges(SQL_JUDGE, route_after_judge)
     graph.add_conditional_edges(EXECUTOR, route_after_executor)
+    graph.add_edge(CHART_ADVISOR, RESULT_SUMMARIZER)
     graph.add_edge(RESULT_SUMMARIZER, END)
 
     return graph.compile(checkpointer=checkpointer)

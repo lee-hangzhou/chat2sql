@@ -43,6 +43,10 @@ class NL2SQLState(BaseModel):
     # SQL 执行结果（由 executor 节点写入）
     execute_result: Optional[List[Dict[str, Any]]] = Field(default=None, description="SQL执行结果集")
 
+    # 图表（由 chart_advisor 节点写入）
+    chart_option: Optional[Dict[str, Any]] = Field(default=None, description="ECharts option JSON")
+    chart_message: Optional[str] = Field(default=None, description="图表生成失败时的原因说明，由 result_summarizer 纳入总结")
+
     # 终态（由 sql_validator / executor 写入）
     is_success: Optional[bool] = Field(default=None, description="最终执行是否成功")
     error_code: Optional[AgentErrorCode] = Field(default=None, description="失败时的错误码")

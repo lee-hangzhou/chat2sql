@@ -6,6 +6,7 @@ import 'highlight.js/styles/github.css'
 import { Bot, Copy, Check, User } from 'lucide-react'
 import { useState, useCallback } from 'react'
 import type { Message } from '../types'
+import ChartView from './ChartView'
 import ResultTable from './ResultTable'
 
 hljs.registerLanguage('sql', sql)
@@ -91,6 +92,11 @@ export default function MessageList({ messages, currentNode, sending }: Props) {
                   <Markdown components={{ code: CodeBlock }}>{msg.content}</Markdown>
                 </div>
               </div>
+              {msg.chartOption && (
+                <div className="ml-11 mt-3">
+                  <ChartView option={msg.chartOption} />
+                </div>
+              )}
               {msg.executeResult && msg.executeResult.length > 0 && (
                 <div className="ml-11 mt-3">
                   <ResultTable data={msg.executeResult} />

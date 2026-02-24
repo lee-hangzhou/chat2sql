@@ -23,6 +23,7 @@ const NODE_LABELS: Record<string, string> = {
   sql_selector: '选优 SQL',
   sql_judge: '语义裁决',
   executor: '执行查询',
+  chart_advisor: '图表建议',
   result_summarizer: '总结结果',
 }
 
@@ -130,10 +131,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const detail = await chatApi.getConversationDetail(id)
       const msgs = detail.messages
-      if (detail.execute_result && msgs.length > 0) {
+      if ((detail.execute_result || detail.chart_option) && msgs.length > 0) {
         for (let i = msgs.length - 1; i >= 0; i--) {
           if (msgs[i].role === 'assistant' && msgs[i].content.includes('```sql')) {
-            msgs[i] = { ...msgs[i], executeResult: detail.execute_result }
+            msgs[i] = {
+              ...msgs[i],
+              executeResult: detail.execute_result,
+              chartOption: detail.chart_option,
+            }
             break
           }
         }
@@ -239,7 +244,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             break
           }
           case 'result': {
-            const { sql, summary, execute_result } = data as unknown as SSEResult
+            const { sql, summary, execute_result, chart_option } = data as unknown as SSEResult
             const content = summary || (sql ? `\`\`\`sql\n${sql}\n\`\`\`` : FALLBACK_RESULT_MSG)
             set({
               sqlResult: sql,
@@ -247,7 +252,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
               currentNode: null,
               messages: [
                 ...get().messages,
-                { role: 'assistant', content, executeResult: execute_result },
+                {
+                  role: 'assistant',
+                  content,
+                  executeResult: execute_result,
+                  chartOption: chart_option,
+                },
               ],
             })
             break

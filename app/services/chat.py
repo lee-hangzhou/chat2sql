@@ -53,6 +53,7 @@ class ChatService:
         messages: list[MessageItem] = []
         sql = None
         execute_result = None
+        chart_option = None
         error_code = None
         error_message = None
         follow_up_question = None
@@ -69,6 +70,7 @@ class ChatService:
                 sql = getattr(sql_result, "sql", None) or sql_result.get("sql")
 
             execute_result = self._stringify_rows(values.get("execute_result"))
+            chart_option = values.get("chart_option")
 
             ec = values.get("error_code")
             error_code = ec.value if ec else None
@@ -90,6 +92,7 @@ class ChatService:
             messages=messages,
             sql=sql,
             execute_result=execute_result,
+            chart_option=chart_option,
             error_code=error_code,
             error_message=error_message,
             follow_up_question=follow_up_question,
@@ -204,6 +207,7 @@ class ChatService:
                             "sql": sql,
                             "summary": summary,
                             "execute_result": self._stringify_rows(values.get("execute_result")),
+                            "chart_option": values.get("chart_option"),
                         },
                     )
                 else:

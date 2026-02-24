@@ -58,6 +58,7 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   executeResult?: Record<string, unknown>[] | null
+  chartOption?: Record<string, unknown> | null
 }
 
 export interface ConversationDetail {
@@ -69,6 +70,7 @@ export interface ConversationDetail {
   messages: Message[]
   sql: string | null
   execute_result: Record<string, unknown>[] | null
+  chart_option: Record<string, unknown> | null
   error_code: string | null
   error_message: string | null
   follow_up_question: string | null
@@ -108,6 +110,7 @@ export interface SSEResult {
   sql: string | null
   summary: string | null
   execute_result: Record<string, unknown>[] | null
+  chart_option: Record<string, unknown> | null
 }
 
 export interface SSEError {

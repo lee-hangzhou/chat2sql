@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.llm import llm
 from app.core.logger import logger
 from app.utils.timing import log_elapsed
+from app.vars.prompts import CHART_FEEDBACK_SECTION
 
 
 class ResultSummarizer:
@@ -37,11 +38,16 @@ class ResultSummarizer:
         sql = state.sql_result.sql if state.sql_result else ""
         rows = state.execute_result or []
 
+        chart_feedback = ""
+        if state.chart_message:
+            chart_feedback = CHART_FEEDBACK_SECTION.format(chart_message=state.chart_message)
+
         prompt_messages = ChatPrompt.result_summary_prompt(
             messages=state.summarized_messages,
             sql=sql,
             row_count=len(rows),
             result_sample=self._build_result_sample(rows),
+            chart_feedback_section=chart_feedback,
         )
 
         try:

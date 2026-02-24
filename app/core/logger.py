@@ -10,9 +10,9 @@ from app.core.config import settings
 
 
 def _add_caller_info(
-    _logger: WrappedLogger,
-    _method_name: str,
-    event_dict: EventDict,
+        _logger: WrappedLogger,
+        _method_name: str,
+        event_dict: EventDict,
 ) -> EventDict:
     """Add caller information (module, function, line) to log record."""
     record = event_dict.get("_record")
@@ -24,9 +24,9 @@ def _add_caller_info(
 
 
 def _drop_color_message_key(
-    _logger: WrappedLogger,
-    _method_name: str,
-    event_dict: EventDict,
+        _logger: WrappedLogger,
+        _method_name: str,
+        event_dict: EventDict,
 ) -> EventDict:
     """Remove color_message key added by uvicorn."""
     event_dict.pop("color_message", None)
@@ -91,7 +91,7 @@ def configure_structlog() -> None:
 
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.stdlib.BoundLogger,
+        wrapper_class=structlog.stdlib.BoundLogger,  # type:ignore
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,

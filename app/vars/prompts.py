@@ -23,10 +23,19 @@ INTENT_RECOGNITION_SYSTEM_PROMPT = """
 - is_query_intent=true，need_follow_up=false
 - 用户意图明确
 
+### 4. 图表偏好提取
+在判断为查询意图时，额外检查用户是否有可视化需求：
+- 用户明确要求图表但未指定类型（"画个图"、"可视化一下"、"图表展示"）：wants_chart=true，chart_preference=null
+- 用户明确要求某种图表（"画柱状图"、"用饼图展示"、"折线图趋势"）：wants_chart=true，chart_preference 设为对应类型
+- 用户未提及图表：wants_chart=null，chart_preference=null
+
+chart_preference 可选值：bar、line、pie、scatter、area、horizontal_bar、funnel
+
 ## 规则
 - 先判断是否为查询意图，再做后续分类
 - 追问要具体明确，一次只问一个问题
 - direct_reply 语气自然友好，结合对话上下文回答
+- 图表偏好仅在用户主动提及可视化时设置，不要主动推测
 """
 
 INTENT_RECOGNITION_HUMAN_PROMPT = """
@@ -82,6 +91,7 @@ RESULT_SUMMARY_SYSTEM_PROMPT = """
 - 如果有数据，提炼关键信息，用一到两句话回答
 - 不要使用 markdown 格式
 - 语气自然友好
+- 如果提供了图表反馈信息，在总结末尾自然地告知用户
 """
 
 RESULT_SUMMARY_HUMAN_PROMPT = """
@@ -91,8 +101,13 @@ RESULT_SUMMARY_HUMAN_PROMPT = """
 ## 查询结果（共 {row_count} 行）
 {result_sample}
 
+{chart_feedback_section}
+
 请总结查询结果
 """
+
+CHART_FEEDBACK_SECTION = """## 图表反馈
+{chart_message}"""
 
 
 SQL_JUDGE_SYSTEM_PROMPT = """
@@ -116,3 +131,57 @@ SQL_JUDGE_HUMAN_PROMPT = """
 
 请输出最优候选的序号
 """
+
+
+CHART_ADVISOR_SYSTEM_PROMPT = """
+你是数据可视化顾问
+
+## 任务
+根据用户问题、SQL 查询和结果数据的特征，推荐最合适的图表类型并指定字段映射
+
+## 图表类型及适用场景
+- bar：分类对比，如各产品销售额、各部门人数
+- horizontal_bar：分类对比且类别名较长或类别数少于 4 个
+- line：时间序列趋势，如月度收入变化、日活跃用户趋势
+- area：趋势 + 强调量感，如流量变化、累计增长
+- pie：占比分布，适合类别数不超过 8 个的比例展示
+- scatter：两个数值变量的相关性或分布
+- funnel：阶段转化，如注册-激活-付费漏斗
+- none：数据不适合可视化
+
+## 规则
+- chart_type 必须从上述类型中选择
+- x_field、y_field、series_field 必须从提供的列名中选择
+- pie 和 funnel 使用 x_field 作为名称列、y_field 作为数值列，无需 series_field
+- scatter 的 x_field 和 y_field 都应为数值列
+- series_field 用于分组，仅在需要多系列对比时设置
+- title 简洁明了，反映数据含义
+- 如果数据不适合可视化，返回 chart_type="none"
+"""
+
+CHART_ADVISOR_HUMAN_PROMPT = """
+## 用户问题
+{question}
+
+## SQL 语句
+{sql}
+
+## 结果列信息
+{columns_info}
+
+## 结果行数
+{row_count}
+
+## 样本数据（前 3 行）
+{sample_rows}
+
+{user_chart_preference_section}
+
+请推荐图表类型和字段映射
+"""
+
+CHART_USER_PREFERENCE_SECTION = """## 用户图表偏好
+用户明确要求使用 {chart_preference} 类型的图表，请优先使用该类型。如果该类型确实不适合当前数据，可以选择更合适的类型并在 title 中说明。"""
+
+CHART_USER_WANTS_SECTION = """## 用户图表偏好
+用户明确要求生成图表，请务必选择一种合适的图表类型，不要返回 none。"""

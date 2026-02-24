@@ -12,6 +12,17 @@ class DatabaseType(str, Enum):
     CLICKHOUSE = "clickhouse"
 
 
+class ChartType(str, Enum):
+    BAR = "bar"
+    LINE = "line"
+    PIE = "pie"
+    SCATTER = "scatter"
+    AREA = "area"
+    HORIZONTAL_BAR = "horizontal_bar"
+    FUNNEL = "funnel"
+    NONE = "none"
+
+
 class AgentErrorCode(str, Enum):
     """Agent 错误码"""
 
@@ -39,6 +50,17 @@ class IntentParseResult(BaseModel):
     direct_reply: Optional[str] = Field(default=None, description="非查询意图时的直接回复")
     need_follow_up: Optional[bool] = Field(default=None, description="是否需要追问")
     follow_up_question: Optional[str] = Field(default=None, description="追问的问题")
+    wants_chart: Optional[bool] = Field(default=None, description="用户是否明确要求可视化")
+    chart_preference: Optional[ChartType] = Field(default=None, description="用户指定的图表类型，未指定则由系统推荐")
+
+
+class ChartAdvice(BaseModel):
+    """LLM 输出的图表建议，仅包含类型和字段映射"""
+    chart_type: ChartType = Field(description="推荐的图表类型")
+    title: str = Field(description="图表标题")
+    x_field: Optional[str] = Field(default=None, description="X 轴对应的列名")
+    y_field: Optional[str] = Field(default=None, description="Y 轴对应的列名")
+    series_field: Optional[str] = Field(default=None, description="分组/系列对应的列名")
 
 
 class SQLResult(BaseModel):

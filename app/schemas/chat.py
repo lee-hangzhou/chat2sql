@@ -63,6 +63,7 @@ class ConversationDetailResponse(BaseModel):
 
     sql: Optional[str] = None
     execute_result: Optional[List[Dict[str, Any]]] = None
+    chart_option: Optional[Dict[str, Any]] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     follow_up_question: Optional[str] = None

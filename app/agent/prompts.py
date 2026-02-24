@@ -12,6 +12,8 @@ from app.vars.prompts import (
     RESULT_SUMMARY_HUMAN_PROMPT,
     SQL_JUDGE_SYSTEM_PROMPT,
     SQL_JUDGE_HUMAN_PROMPT,
+    CHART_ADVISOR_SYSTEM_PROMPT,
+    CHART_ADVISOR_HUMAN_PROMPT,
 )
 from app.vars.vars import HUMAN_TYPE, SYSTEM_TYPE
 
@@ -52,5 +54,13 @@ class ChatPrompt:
             (SYSTEM_TYPE, SQL_JUDGE_SYSTEM_PROMPT),
             MessagesPlaceholder(variable_name="messages"),
             (HUMAN_TYPE, SQL_JUDGE_HUMAN_PROMPT),
+        ])
+        return template.format_messages(**kwargs)
+
+    @classmethod
+    def chart_advisor_prompt(cls, **kwargs) -> List[BaseMessage]:
+        template = ChatPromptTemplate.from_messages([
+            (SYSTEM_TYPE, CHART_ADVISOR_SYSTEM_PROMPT),
+            (HUMAN_TYPE, CHART_ADVISOR_HUMAN_PROMPT),
         ])
         return template.format_messages(**kwargs)
