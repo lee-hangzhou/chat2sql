@@ -1,6 +1,6 @@
 # chat2sql
 
-基于 LangGraph 的 NL2SQL Agent，支持多轮对话、Schema 检索、多候选 SQL 生成与选优、校验执行。
+基于 LangGraph 的 NL2SQL Agent，支持多轮对话、Schema 检索、多候选 SQL 生成与选优、校验执行、数据可视化建议。
 
 后端项目结构基于 [FastScaff](https://github.com/lee-hangzhou/fastscaff) 脚手架生成。
 
@@ -10,7 +10,7 @@
 
 **业务数据库:** MySQL, PostgreSQL, ClickHouse（多方言适配）
 
-**前端:** React, TypeScript, Vite, Tailwind CSS, Zustand
+**前端:** React, TypeScript, Vite, Tailwind CSS, Zustand, ECharts
 
 **可观测性:** Arize Phoenix (OpenTelemetry)
 
@@ -34,6 +34,8 @@ sql_selector
   ├─ 结果不一致（首次）→ sql_generator（仲裁）→ 回到 sql_validator
   └─ 结果不一致（仲裁后）→ sql_judge → executor
                                          ↓
+                                    chart_advisor
+                                         ↓
                                   result_summarizer
 ```
 
@@ -46,7 +48,8 @@ sql_selector
 - **sql_selector**: 执行候选并比对结果集，多数投票选优；无多数时触发仲裁
 - **sql_judge**: LLM 语义裁决，从结果不一致的候选中选择最优
 - **executor**: 执行最终 SQL
-- **result_summarizer**: LLM 根据用户问题和查询结果生成自然语言总结
+- **chart_advisor**: 代码前置过滤 + LLM 推荐图表类型与字段映射，生成 ECharts option；不适合可视化时通过 chart_message 反馈
+- **result_summarizer**: LLM 根据用户问题、查询结果和图表反馈生成自然语言总结
 
 ## 项目结构
 
@@ -66,7 +69,7 @@ chat2sql/
 │   ├── repositories/       # 数据访问层
 │   ├── services/           # 业务逻辑层（含 Schema 同步）
 │   ├── middleware/         # JWT、日志、安全、Tracing 中间件
-│   ├── utils/              # 公共工具（计时、缓存等）
+│   ├── utils/              # 公共工具（计时、缓存、图表构建等）
 │   └── exceptions/         # 异常定义
 ├── web/                    # 前端（React）
 ├── docker-compose.yml
