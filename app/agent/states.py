@@ -1,6 +1,6 @@
 from typing import Any, Annotated, Dict, List, Optional
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AnyMessage, BaseMessage
 from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
 
@@ -22,6 +22,8 @@ class NL2SQLState(BaseModel):
     schemas: Annotated[List[str], merge_schemas] = Field(default_factory=list, description="检索的表结构列表")
     intent_parse_result: Optional[IntentParseResult] = Field(default=None, description="格式化的意图解析")
     messages: Annotated[List[BaseMessage], add_messages] = Field(default_factory=list, description="对话消息记录")
+    summarized_messages: List[AnyMessage] = Field(default_factory=list, description="摘要后的消息列表，由 SummarizationNode 写入，LLM 节点从此读取")
+    context: Dict[str, Any] = Field(default_factory=dict, description="SummarizationNode 运行时上下文，存储 RunningSummary")
     sql_candidates: List[SQLResult] = Field(default_factory=list, description="SQL 候选列表，由 sql_generator 生成")
     validated_candidates: List[ValidatedCandidate] = Field(default_factory=list, description="通过校验的候选，由 sql_validator 写入")
     candidate_exec_results: List[CandidateExecResult] = Field(default_factory=list, description="已执行候选的比对结果，由 sql_selector 写入")

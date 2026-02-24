@@ -10,7 +10,6 @@ from app.core.database import business_db
 from app.core.llm import llm
 from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode, SQLResult
-from app.utils.messages import trim_messages
 from app.utils.timing import log_elapsed
 from app.vars.prompts import VALIDATION_FEEDBACK_SECTION
 
@@ -47,10 +46,9 @@ class SQLGenerator:
     def _build_prompt(self, state: NL2SQLState) -> List[BaseMessage]:
         """组装完整的 SQL 生成 prompt：schema + 对话历史 + 校验反馈"""
         schemas = "\n\n".join(state.schemas)
-        trimmed = trim_messages(state.messages)
         feedback = self._build_validation_feedback(state)
         return ChatPrompt.generate_sql_prompt(
-            messages=trimmed,
+            messages=state.summarized_messages,
             schemas=schemas,
             validation_feedback_section=feedback,
             dialect_name=self.dialect.name,

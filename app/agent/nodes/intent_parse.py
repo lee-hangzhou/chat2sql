@@ -1,6 +1,6 @@
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.messages import AIMessage
 
 from app.agent.prompts import ChatPrompt
 from app.agent.states import NL2SQLState
@@ -8,7 +8,6 @@ from app.core.config import settings
 from app.core.llm import llm
 from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode, IntentParseResult
-from app.utils.messages import trim_messages
 from app.utils.timing import log_elapsed
 
 
@@ -27,11 +26,10 @@ class IntentParse:
 
         logger.info("intent_parse.start")
 
-        trimmed_messages = trim_messages(state.messages)
         schemas = "\n\n".join(state.schemas)
 
         prompt_messages = ChatPrompt.intent_recognition_prompt(
-            messages=trimmed_messages,
+            messages=state.summarized_messages,
             schemas=schemas,
         )
 
@@ -39,7 +37,6 @@ class IntentParse:
             async with log_elapsed(logger, "intent_parse.llm_completed") as ctx:
                 result: IntentParseResult = await self.structured_llm.ainvoke(prompt_messages)
                 ctx["need_follow_up"] = result.need_follow_up
-                ctx["need_retry_retrieve"] = result.need_retry_retrieve
         except Exception as e:
             logger.error("intent_parse.llm_failed", error=str(e))
             return {
@@ -49,6 +46,13 @@ class IntentParse:
             }
 
         return_dict: Dict[str, Any] = {"intent_parse_result": result}
+
+        if not result.is_query_intent:
+            reply = result.direct_reply or "请问您想查询什么数据？"
+            return_dict["messages"] = [AIMessage(content=reply)]
+            return_dict["is_success"] = True
+            return return_dict
+
         if result.need_follow_up and result.follow_up_question:
             return_dict["messages"] = [AIMessage(content=result.follow_up_question)]
 

@@ -35,7 +35,7 @@ class SQLJudge:
         )
 
         prompt_messages = ChatPrompt.judge_prompt(
-            messages=state.messages,
+            messages=state.summarized_messages,
             schemas=schemas,
             candidates_text=candidates_text,
         )

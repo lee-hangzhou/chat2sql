@@ -1,6 +1,7 @@
-from contextlib import contextmanager
-from typing import Generator
+from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator
 
+from langmem.short_term import SummarizationNode
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
@@ -16,8 +17,9 @@ from app.agent.nodes.sql_selector import SQLSelector
 from app.agent.nodes.sql_validator import SQLValidator
 from app.agent.states import NL2SQLState
 from app.core.config import CheckpointerType, settings
+from app.core.llm import llm
 
-# 节点名称常量
+SUMMARIZE = "summarize"
 SCHEMA_RETRIEVER = "schema_retriever"
 INTENT_PARSE = "intent_parse"
 FOLLOW_UP = "follow_up"
@@ -29,28 +31,28 @@ EXECUTOR = "executor"
 RESULT_SUMMARIZER = "result_summarizer"
 
 
-def route_after_schema_retriever(state: NL2SQLState) -> str:
-    if state.is_success is False:
-        return END
-    return INTENT_PARSE
-
-
 def route_after_intent_parse(state: NL2SQLState) -> str:
-    """优先级：schema_retry > follow_up > sql_generator"""
+    """非查询 → END，追问 → FOLLOW_UP，查询意图 → SCHEMA_RETRIEVER"""
     if state.is_success is False:
         return END
     result = state.intent_parse_result
-    if result.need_retry_retrieve:
-        return SCHEMA_RETRIEVER
+    if not result.is_query_intent:
+        return END
     if result.need_follow_up:
         return FOLLOW_UP
+    return SCHEMA_RETRIEVER
+
+
+def route_after_schema_retriever(state: NL2SQLState) -> str:
+    if state.is_success is False:
+        return END
     return SQL_GENERATOR
 
 
 def route_after_follow_up(state: NL2SQLState) -> str:
     if state.is_success is False:
         return END
-    return INTENT_PARSE
+    return SUMMARIZE
 
 
 def route_after_sql_generator(state: NL2SQLState) -> str:
@@ -97,21 +99,21 @@ def route_after_executor(state: NL2SQLState) -> str:
     return RESULT_SUMMARIZER
 
 
-@contextmanager
-def create_checkpointer() -> Generator[BaseCheckpointSaver, None, None]:
-    """根据配置创建 checkpointer，通过 context manager 管理连接生命周期"""
+@asynccontextmanager
+async def create_checkpointer() -> AsyncGenerator[BaseCheckpointSaver, None]:
+    """根据配置创建 checkpointer，通过 async context manager 管理连接生命周期"""
     checkpointer_type = settings.CHECKPOINTER_TYPE
 
     if checkpointer_type == CheckpointerType.SQLITE:
-        from langgraph.checkpoint.sqlite import SqliteSaver
-        with SqliteSaver.from_conn_string(settings.CHECKPOINTER_SQLITE_PATH) as saver:
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        async with AsyncSqliteSaver.from_conn_string(settings.CHECKPOINTER_SQLITE_PATH) as saver:
             yield saver
             return
 
     if checkpointer_type == CheckpointerType.POSTGRES:
-        from langgraph.checkpoint.postgres import PostgresSaver
-        with PostgresSaver.from_conn_string(settings.CHECKPOINTER_POSTGRES_URI) as saver:
-            saver.setup()
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        async with AsyncPostgresSaver.from_conn_string(settings.CHECKPOINTER_POSTGRES_URI) as saver:
+            await saver.asetup()
             yield saver
             return
 
@@ -122,6 +124,13 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     """构建 NL2SQL graph，checkpointer 由调用方注入"""
     graph = StateGraph(NL2SQLState)
 
+    summarization_node = SummarizationNode(
+        model=llm.bind(max_tokens=settings.SUMMARIZATION_MAX_SUMMARY_TOKENS),
+        max_tokens=settings.SUMMARIZATION_MAX_TOKENS,
+        max_summary_tokens=settings.SUMMARIZATION_MAX_SUMMARY_TOKENS,
+    )
+
+    graph.add_node(SUMMARIZE, summarization_node)
     graph.add_node(SCHEMA_RETRIEVER, SchemaRetriever())
     graph.add_node(INTENT_PARSE, IntentParse())
     graph.add_node(FOLLOW_UP, FollowUp())
@@ -132,9 +141,10 @@ def build_graph(checkpointer: BaseCheckpointSaver):
     graph.add_node(EXECUTOR, Executor())
     graph.add_node(RESULT_SUMMARIZER, ResultSummarizer())
 
-    graph.add_edge(START, SCHEMA_RETRIEVER)
-    graph.add_conditional_edges(SCHEMA_RETRIEVER, route_after_schema_retriever)
+    graph.add_edge(START, SUMMARIZE)
+    graph.add_edge(SUMMARIZE, INTENT_PARSE)
     graph.add_conditional_edges(INTENT_PARSE, route_after_intent_parse)
+    graph.add_conditional_edges(SCHEMA_RETRIEVER, route_after_schema_retriever)
     graph.add_conditional_edges(FOLLOW_UP, route_after_follow_up)
     graph.add_conditional_edges(SQL_GENERATOR, route_after_sql_generator)
     graph.add_conditional_edges(SQL_VALIDATOR, route_after_validate)

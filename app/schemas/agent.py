@@ -35,8 +35,9 @@ class AgentErrorCode(str, Enum):
 
 
 class IntentParseResult(BaseModel):
+    is_query_intent: bool = Field(default=True, description="用户输入是否为数据查询意图")
+    direct_reply: Optional[str] = Field(default=None, description="非查询意图时的直接回复")
     need_follow_up: Optional[bool] = Field(default=None, description="是否需要追问")
-    need_retry_retrieve: Optional[bool] = Field(default=None, description="是否需要重新检索schema")
     follow_up_question: Optional[str] = Field(default=None, description="追问的问题")
 
 

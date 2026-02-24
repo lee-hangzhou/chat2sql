@@ -8,7 +8,6 @@ from app.agent.states import NL2SQLState
 from app.core.config import settings
 from app.core.llm import llm
 from app.core.logger import logger
-from app.utils.messages import trim_messages
 from app.utils.timing import log_elapsed
 
 
@@ -39,7 +38,7 @@ class ResultSummarizer:
         rows = state.execute_result or []
 
         prompt_messages = ChatPrompt.result_summary_prompt(
-            messages=trim_messages(state.messages),
+            messages=state.summarized_messages,
             sql=sql,
             row_count=len(rows),
             result_sample=self._build_result_sample(rows),

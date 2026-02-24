@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await _auto_sync_schemas()
 
-    with create_checkpointer() as checkpointer:
+    async with create_checkpointer() as checkpointer:
         app.state.nl2sql_graph = build_graph(checkpointer)
         logger.info("NL2SQL graph initialized")
 

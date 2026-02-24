@@ -1,5 +1,6 @@
 aiomysql==0.3.2
 aiosqlite==0.22.1
+asynch
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
@@ -9,6 +10,7 @@ cachetools==7.0.1
 certifi==2026.1.4
 cffi==2.0.0
 charset-normalizer==3.4.4
+clickhouse-sqlalchemy
 click==8.3.1
 cryptography==46.0.5
 distro==1.9.0
@@ -38,6 +40,7 @@ langchain-core==1.2.11
 langchain-milvus
 langchain-ollama==1.0.1
 langchain-openai==1.1.9
+langmem
 langgraph==1.0.8
 langgraph-checkpoint==4.0.0
 langgraph-checkpoint-postgres==3.0.4

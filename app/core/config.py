@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     AGENT_MAX_FOLLOW_UPS: int = Field(default=3, description="最大追问次数")
 
     # Checkpointer
-    CHECKPOINTER_TYPE: CheckpointerType = Field(default=CheckpointerType.MEMORY, description="checkpointer 后端类型")
+    CHECKPOINTER_TYPE: CheckpointerType = Field(default=CheckpointerType.SQLITE, description="checkpointer 后端类型")
     CHECKPOINTER_SQLITE_PATH: str = Field(default="./checkpoints.db", description="SQLite checkpointer 文件路径")
     CHECKPOINTER_POSTGRES_URI: Optional[str] = Field(default=None, description="PostgreSQL checkpointer 连接地址")
 
@@ -69,7 +69,6 @@ class Settings(BaseSettings):
     LLM_MAX_RETRIES: int = Field(default=3, description="LLM HTTP 层重试次数（网络错误、限流等）")
     LLM_RETRY_ATTEMPTS: int = Field(default=3, description="LLM structured output 应用层重试次数")
     AGENT_RECURSION_LIMIT: int = Field(default=25, description="LangGraph 单次调用最大节点执行次数")
-    AGENT_MAX_MESSAGE_PAIRS: int = Field(default=5, description="Prompt 中保留的最大消息轮数")
     SQL_CANDIDATE_COUNT: int = Field(default=2, description="SQL 候选生成数量")
     SQL_CANDIDATE_TEMPERATURE: float = Field(default=0.7, description="SQL 候选生成温度")
 
@@ -78,6 +77,10 @@ class Settings(BaseSettings):
     MILVUS_COLLECTION_NAME: str = Field(default="table_schemas", description="Milvus 集合名称")
     MILVUS_SEARCH_LIMIT: int = Field(default=10, description="Milvus 向量检索返回的最大表结构数量")
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
+
+    # 消息摘要
+    SUMMARIZATION_MAX_TOKENS: int = Field(default=4096, description="摘要后保留的最大 token 数")
+    SUMMARIZATION_MAX_SUMMARY_TOKENS: int = Field(default=512, description="摘要本身的最大 token 数")
 
     # Phoenix (可观测性)
     PHOENIX_COLLECTOR_ENDPOINT: str = Field(default="http://localhost:4317", description="Phoenix OTLP gRPC 采集端点")
