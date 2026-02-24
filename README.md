@@ -6,7 +6,9 @@
 
 ## 技术栈
 
-**后端:** FastAPI, LangGraph, LangChain, Tortoise ORM, Milvus, MySQL, Redis
+**后端:** FastAPI, LangGraph, LangChain, LangMem, Tortoise ORM, SQLAlchemy, Milvus, Redis
+
+**业务数据库:** MySQL, PostgreSQL, ClickHouse（多方言适配）
 
 **前端:** React, TypeScript, Vite, Tailwind CSS, Zustand
 
@@ -15,11 +17,13 @@
 ## Agent 流程
 
 ```
-schema_retriever
+summarize（消息摘要）
   ↓
 intent_parse
+  ├─ 非查询意图 → 直接回复 → END
+  ├─ 意图不明确 → follow_up（挂起等待用户回复）→ 回到 summarize
   ↓
-  ├─ 意图不明确 → follow_up（挂起等待用户回复）→ 回到 intent_parse
+schema_retriever
   ↓
 sql_generator
   ↓
@@ -33,11 +37,12 @@ sql_selector
                                   result_summarizer
 ```
 
-- **schema_retriever**: 基于 Milvus 向量检索匹配的表结构
-- **intent_parse**: LLM 判断用户意图是否明确、Schema 是否充足
+- **summarize**: 基于 LangMem SummarizationNode 管理对话历史，超过 token 阈值时自动摘要
+- **intent_parse**: LLM 判断用户意图——非查询直接回复，查询意图不明确时追问，明确时进入 SQL 生成流程
 - **follow_up**: 意图不明确时挂起等待用户补充信息
-- **sql_generator**: 并发生成多条候选 SQL
-- **sql_validator**: 语法校验 + EXPLAIN 验证 + 性能分析
+- **schema_retriever**: 基于 Milvus 向量检索匹配的表结构，仅在确认查询意图后执行
+- **sql_generator**: 并发生成多条候选 SQL，支持 MySQL / PostgreSQL / ClickHouse 方言
+- **sql_validator**: 语法校验 + EXPLAIN 验证 + 性能分析（方言自适应）
 - **sql_selector**: 执行候选并比对结果集，多数投票选优；无多数时触发仲裁
 - **sql_judge**: LLM 语义裁决，从结果不一致的候选中选择最优
 - **executor**: 执行最终 SQL
@@ -55,13 +60,13 @@ chat2sql/
 │   │   ├── prompts.py      # Prompt 模板构建
 │   │   └── nodes/          # 各节点实现
 │   ├── api/v1/endpoints/   # API 接口
-│   ├── core/               # 配置、数据库、安全、LLM、日志
+│   ├── core/               # 配置、数据库、方言适配、LLM、向量存储、日志
 │   ├── models/             # Tortoise ORM 模型
 │   ├── schemas/            # Pydantic 模型
 │   ├── repositories/       # 数据访问层
-│   ├── services/           # 业务逻辑层
+│   ├── services/           # 业务逻辑层（含 Schema 同步）
 │   ├── middleware/         # JWT、日志、安全、Tracing 中间件
-│   ├── utils/              # 公共工具（消息裁剪、计时等）
+│   ├── utils/              # 公共工具（计时、缓存等）
 │   └── exceptions/         # 异常定义
 ├── web/                    # 前端（React）
 ├── docker-compose.yml
@@ -115,8 +120,11 @@ OPENAI_MODEL=gpt-4o-mini
 # OPENAI_BASE_URL=http://localhost:11434/v1
 # OPENAI_MODEL=qwen3:8b
 
-# [必填] 业务数据库 — 替换为你实际要查询的数据库地址
-BUSINESS_DATABASE_URL=mysql://root:123456@localhost:3306/your_business_db
+# [必填] 业务数据库 — SQLAlchemy 异步连接地址，替换为你实际要查询的数据库
+# MySQL:      mysql+aiomysql://user:pass@host:3306/db
+# PostgreSQL: postgresql+psycopg://user:pass@host:5432/db
+# ClickHouse: clickhouse+asynch://user:pass@host:9000/db
+BUSINESS_DATABASE_URL=mysql+aiomysql://root:123456@localhost:3306/your_business_db
 ```
 
 其他配置项均有合理默认值，参见 `.env.example`。生产环境务必修改 `JWT_SECRET_KEY`。
@@ -189,9 +197,9 @@ OPENAI_API_KEY=ollama
 OPENAI_MODEL=qwen3:8b
 OPENAI_BASE_URL=http://host.docker.internal:11434/v1
 
-# [必填] 业务数据库
+# [必填] 业务数据库（SQLAlchemy 异步格式）
 # Docker 内使用服务名 mysql 而非 localhost，密码与 MYSQL_ROOT_PASSWORD 一致
-BUSINESS_DATABASE_URL=mysql://root:chat2sql@mysql:3306/your_business_db
+BUSINESS_DATABASE_URL=mysql+aiomysql://root:chat2sql@mysql:3306/your_business_db
 ```
 
 **2. 构建并启动**
