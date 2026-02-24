@@ -38,7 +38,7 @@ class SchemaService:
             vector_store,
             cleanup="full",  # type:ignore
             source_id_key=self._SOURCE_ID_KEY,
-            key_encoder=lambda content: hashlib.sha256(content.encode()).hexdigest(),  # type:ignore
+            key_encoder=lambda doc: hashlib.sha256(doc.page_content.encode()).hexdigest(),  # type:ignore
         )
 
         logger.info(
