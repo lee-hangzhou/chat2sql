@@ -59,7 +59,14 @@ class ResultSummarizer:
             summary = self._fallback_summary(len(rows))
 
         content = f"```sql\n{sql}\n```\n\n{summary}" if sql else summary
-        return {"messages": [AIMessage(content=content)]}
+
+        additional_kwargs: dict = {}
+        if state.chart_option:
+            additional_kwargs["chart_option"] = state.chart_option
+        if state.execute_result:
+            additional_kwargs["execute_result"] = state.execute_result
+
+        return {"messages": [AIMessage(content=content, additional_kwargs=additional_kwargs)]}
 
     @classmethod
     def _fallback_summary(cls, row_count: int) -> str:

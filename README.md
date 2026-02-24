@@ -21,6 +21,7 @@ summarize（消息摘要）
   ↓
 intent_parse
   ├─ 非查询意图 → 直接回复 → END
+  ├─ 展示变更（复用数据）→ chart_advisor → result_summarizer → END
   ├─ 意图不明确 → follow_up（挂起等待用户回复）→ 回到 summarize
   ↓
 schema_retriever
@@ -40,7 +41,7 @@ sql_selector
 ```
 
 - **summarize**: 基于 LangMem SummarizationNode 管理对话历史，超过 token 阈值时自动摘要
-- **intent_parse**: LLM 判断用户意图——非查询直接回复，查询意图不明确时追问，明确时进入 SQL 生成流程
+- **intent_parse**: LLM 判断用户意图——非查询直接回复，展示变更时复用已有数据跳转 chart_advisor，查询意图不明确时追问，明确时进入 SQL 生成流程
 - **follow_up**: 意图不明确时挂起等待用户补充信息
 - **schema_retriever**: 基于 Milvus 向量检索匹配的表结构，仅在确认查询意图后执行
 - **sql_generator**: 并发生成多条候选 SQL，支持 MySQL / PostgreSQL / ClickHouse 方言
@@ -168,7 +169,7 @@ make fe-dev
 
 **7. 同步业务库表结构**
 
-首次使用前，需要将业务数据库的表结构灌入 Milvus 向量库，Agent 才能检索到可用的表。可以通过前端界面点击「同步 Schema」按钮，或直接调用接口：
+应用首次启动时会自动检测 Milvus 是否为空，为空则自动同步业务库表结构。后续如果业务库表结构发生变更，可通过前端「同步 Schema」按钮或接口手动触发增量同步：
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/schema/sync \

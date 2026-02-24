@@ -45,11 +45,20 @@ class IntentParse:
                 "error_message": str(e),
             }
 
+        if result.is_presentation_change:
+            if not state.execute_result:
+                result.is_presentation_change = False
+            result.is_query_intent = True
+
         return_dict: Dict[str, Any] = {"intent_parse_result": result}
 
         if not result.is_query_intent:
             reply = result.direct_reply or "请问您想查询什么数据？"
             return_dict["messages"] = [AIMessage(content=reply)]
+            return_dict["is_success"] = True
+            return return_dict
+
+        if result.is_presentation_change:
             return_dict["is_success"] = True
             return return_dict
 

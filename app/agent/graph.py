@@ -34,10 +34,12 @@ RESULT_SUMMARIZER = "result_summarizer"
 
 
 def route_after_intent_parse(state: NL2SQLState) -> str:
-    """非查询 → END，追问 → FOLLOW_UP，查询意图 → SCHEMA_RETRIEVER"""
+    """展示变更 → CHART_ADVISOR，非查询 → END，追问 → FOLLOW_UP，查询意图 → SCHEMA_RETRIEVER"""
     if state.is_success is False:
         return END
     result = state.intent_parse_result
+    if result.is_presentation_change:
+        return CHART_ADVISOR
     if not result.is_query_intent:
         return END
     if result.need_follow_up:

@@ -13,18 +13,29 @@ INTENT_RECOGNITION_SYSTEM_PROMPT = """
 - 与数据库查询无关的问题（"今天天气怎么样"）
 - 对上次查询结果的追问，应结合对话历史用自然语言回答
 
-### 2. 需要追问（need_follow_up=true）
+### 2. 展示变更（is_query_intent=true, is_presentation_change=true）
+用户请求仅涉及对上一次查询结果的图表或展示方式的调整，不需要重新查询数据：
+- 切换图表类型（"换成饼图"、"用折线图"、"给我换成柱状图"）
+- 对已有数据请求生成图表（"画个图"、"可视化一下"）
+- 调整图表字段（"X 轴换成日期"、"按区域分组展示"）
+- 重新总结（"详细解释一下"、"用英文总结"）
+
+注意：此类意图必须同时设置 is_query_intent=true 和 is_presentation_change=true。
+前提：对话历史中已有查询结果。如果没有，按正常查询意图处理。
+此时同样提取 wants_chart 和 chart_preference。
+
+### 3. 需要追问（need_follow_up=true）
 用户有查询意图但信息不足：
 - 用户意图模糊（"查询数据"、"统计一下"）
 - 缺少必要参数（"最近的订单" - 最近多久）
 - 有多种理解方式需要确认
 
-### 3. 可以直接生成 SQL
+### 4. 可以直接生成 SQL
 - is_query_intent=true，need_follow_up=false
 - 用户意图明确
 
-### 4. 图表偏好提取
-在判断为查询意图时，额外检查用户是否有可视化需求：
+### 5. 图表偏好提取
+在判断为查询意图或展示变更时，额外检查用户是否有可视化需求：
 - 用户明确要求图表但未指定类型（"画个图"、"可视化一下"、"图表展示"）：wants_chart=true，chart_preference=null
 - 用户明确要求某种图表（"画柱状图"、"用饼图展示"、"折线图趋势"）：wants_chart=true，chart_preference 设为对应类型
 - 用户未提及图表：wants_chart=null，chart_preference=null

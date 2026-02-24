@@ -63,7 +63,13 @@ class ChatService:
             values = state.values
             for msg in values.get("messages", []):
                 role = ROLE_USER if msg.type == HUMAN_TYPE else ROLE_ASSISTANT
-                messages.append(MessageItem(role=role, content=msg.content))
+                item = MessageItem(role=role, content=msg.content)
+                kwargs = getattr(msg, "additional_kwargs", None) or {}
+                if kwargs.get("execute_result"):
+                    item.execute_result = self._stringify_rows(kwargs["execute_result"])
+                if kwargs.get("chart_option"):
+                    item.chart_option = kwargs["chart_option"]
+                messages.append(item)
 
             sql_result = values.get("sql_result")
             if sql_result:
@@ -196,9 +202,11 @@ class ChatService:
                         )
                     msgs = values.get("messages", [])
                     summary = ""
+                    last_kwargs: dict = {}
                     for msg in reversed(msgs):
                         if msg.type != HUMAN_TYPE and msg.content:
                             summary = msg.content
+                            last_kwargs = getattr(msg, "additional_kwargs", {}) or {}
                             break
 
                     yield self._sse_event(
@@ -206,8 +214,8 @@ class ChatService:
                         {
                             "sql": sql,
                             "summary": summary,
-                            "execute_result": self._stringify_rows(values.get("execute_result")),
-                            "chart_option": values.get("chart_option"),
+                            "execute_result": self._stringify_rows(last_kwargs.get("execute_result")),
+                            "chart_option": last_kwargs.get("chart_option"),
                         },
                     )
                 else:

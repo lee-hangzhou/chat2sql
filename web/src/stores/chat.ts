@@ -130,19 +130,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     })
     try {
       const detail = await chatApi.getConversationDetail(id)
-      const msgs = detail.messages
-      if ((detail.execute_result || detail.chart_option) && msgs.length > 0) {
-        for (let i = msgs.length - 1; i >= 0; i--) {
-          if (msgs[i].role === 'assistant' && msgs[i].content.includes('```sql')) {
-            msgs[i] = {
-              ...msgs[i],
-              executeResult: detail.execute_result,
-              chartOption: detail.chart_option,
-            }
-            break
-          }
-        }
-      }
+      const msgs: Message[] = detail.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        executeResult: (m as Record<string, unknown>).execute_result as Message['executeResult'] ?? undefined,
+        chartOption: (m as Record<string, unknown>).chart_option as Message['chartOption'] ?? undefined,
+      }))
       set({
         messages: msgs,
         sqlResult: detail.sql,

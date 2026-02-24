@@ -51,6 +51,8 @@ class ConversationListItem(BaseModel):
 class MessageItem(BaseModel):
     role: str = Field(..., description="user 或 assistant")
     content: str
+    execute_result: Optional[List[Dict[str, Any]]] = None
+    chart_option: Optional[Dict[str, Any]] = None
 
 
 class ConversationDetailResponse(BaseModel):
