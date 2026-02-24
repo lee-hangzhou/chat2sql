@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(default="sqlite://./smart_chat.db")
 
     # Business database for NL2SQL query validation (optional)
-    BUSINESS_DATABASE_URL: Optional[str] = Field(default="mysql://root:123456@localhost:3306/ai_translator", description="业务数据库连接地址，供 NL2SQL 查询验证使用")
+    BUSINESS_DATABASE_URL: str = Field(description="业务数据库异步连接地址")
     EXPLAIN_MAX_ROWS: int = Field(default=10000, description="EXPLAIN 预估扫描行数阈值，超过则标记为性能问题")
     EXECUTOR_MAX_ROWS: int = Field(default=1000, description="执行结果最大返回行数，超出部分截断")
     AGENT_MAX_RETRIES: int = Field(default=3, description="SQL 校验失败最大重试次数")
@@ -76,7 +76,6 @@ class Settings(BaseSettings):
     # Milvus
     MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")
     MILVUS_COLLECTION_NAME: str = Field(default="table_schemas", description="Milvus 集合名称")
-    MILVUS_SCHEMA_FIELD: str = Field(default="table_schema", description="Milvus 中存储表结构的标量字段名")
     MILVUS_SEARCH_LIMIT: int = Field(default=10, description="Milvus 向量检索返回的最大表结构数量")
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
 

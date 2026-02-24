@@ -1,6 +1,9 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+from sqlalchemy import MetaData, text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.schema import CreateTable
 from tortoise import Tortoise
 
 from app.core.config import settings
@@ -9,6 +12,11 @@ from app.core.singleton import Singleton
 
 
 class Database(Singleton):
+    _MIN_SIZE: int = 5
+    _MAX_SIZE: int = 20
+    _CONNECT_TIMEOUT: int = 10
+    _POOL_RECYCLE: int = 3600
+
     def __init__(self) -> None:
         self._initialized = False
 
@@ -16,10 +24,8 @@ class Database(Singleton):
     def is_initialized(self) -> bool:
         return self._initialized
 
-    @staticmethod
-    def _add_pool_params(base_url: str) -> str:
+    def _add_pool_params(self, base_url: str) -> str:
         """Add connection pool parameters to database URL."""
-        # SQLite doesn't support connection pooling
         if base_url.startswith("sqlite"):
             return base_url
 
@@ -27,10 +33,10 @@ class Database(Singleton):
         params = parse_qs(parsed.query)
 
         pool_config = {
-            "minsize": 5,
-            "maxsize": 20,
-            "connect_timeout": 10,
-            "pool_recycle": 3600,
+            "minsize": self._MIN_SIZE,
+            "maxsize": self._MAX_SIZE,
+            "connect_timeout": self._CONNECT_TIMEOUT,
+            "pool_recycle": self._POOL_RECYCLE,
         }
 
         for key, value in pool_config.items():
@@ -38,7 +44,7 @@ class Database(Singleton):
                 params[key] = [str(value)]
 
         new_query = urlencode(params, doseq=True)
-        return urlunparse(parsed._replace(query=new_query))
+        return urlunparse(parsed._replace(query=new_query))  # type:ignore
 
     async def connect(self, db_url: Optional[str] = None) -> None:
         if self._initialized:
@@ -58,11 +64,6 @@ class Database(Singleton):
             },
             "use_tz": True,
         }
-
-        if settings.BUSINESS_DATABASE_URL:
-            tortoise_config["connections"]["business"] = self._add_pool_params(
-                settings.BUSINESS_DATABASE_URL
-            )
 
         await Tortoise.init(
             config=tortoise_config,
@@ -86,22 +87,58 @@ db = Database()
 
 
 class BusinessDatabase(Singleton):
-    """业务数据库连接，供 NL2SQL 查询验证使用"""
+    """业务数据库连接"""
 
-    _CONNECTION_NAME = "business"
+    _POOL_SIZE = 5
+    _MAX_OVERFLOW = 15
+    _POOL_RECYCLE = 3600
+    _POOL_TIMEOUT = 10
 
-    @property
-    def is_configured(self) -> bool:
-        """是否已配置业务数据库"""
-        return bool(settings.BUSINESS_DATABASE_URL)
+    def __init__(self) -> None:
+        self._engine: Optional[AsyncEngine] = None
 
-    def get_connection(self):
-        """获取业务数据库的 Tortoise 连接"""
-        if not self.is_configured:
-            raise RuntimeError(
-                "Business database not configured. Set BUSINESS_DATABASE_URL in environment."
-            )
-        return Tortoise.get_connection(self._CONNECTION_NAME)
+    async def connect(self) -> None:
+        if self._engine is not None:
+            return
+
+        url = settings.BUSINESS_DATABASE_URL
+        self._engine = create_async_engine(
+            url,
+            pool_size=self._POOL_SIZE,
+            max_overflow=self._MAX_OVERFLOW,
+            pool_recycle=self._POOL_RECYCLE,
+            pool_timeout=self._POOL_TIMEOUT,
+        )
+        logger.info("Business database connected")
+
+    async def disconnect(self) -> None:
+        if self._engine is None:
+            return
+        await self._engine.dispose()
+        self._engine = None
+        logger.info("Business database disconnected")
+
+    async def execute_query(self, sql: str) -> List[Dict[str, Any]]:
+        async with self._engine.connect() as conn:
+            result = await conn.execute(text(sql))
+            return [dict(row._mapping) for row in result]
+
+    async def get_table_ddls(self) -> List[Tuple[str, str]]:
+        """通过 SQLAlchemy metadata 反射生成每张表的 DDL"""
+
+        def _reflect(sync_conn) -> List[Tuple[str, str]]:
+            metadata = MetaData()
+            metadata.reflect(bind=sync_conn)
+            return [
+                (
+                    table.name,
+                    str(CreateTable(table).compile(sync_conn.engine)),
+                )
+                for table in metadata.sorted_tables
+            ]
+
+        async with self._engine.connect() as conn:
+            return await conn.run_sync(_reflect)
 
 
 business_db = BusinessDatabase()

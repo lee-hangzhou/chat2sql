@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import sqlglot
 from sqlglot import exp
-from tortoise.exceptions import OperationalError
+from sqlalchemy.exc import OperationalError
 
 from app.agent.states import NL2SQLState
 from app.core.config import settings
@@ -67,19 +67,16 @@ class SQLValidator:
 
     @staticmethod
     def _extract_error_code(e: OperationalError) -> Optional[int]:
-        """从 Tortoise OperationalError 中提取 MySQL 错误码"""
-        if not e.args:
-            return None
-        original = e.args[0]
-        if isinstance(original, Exception) and original.args and isinstance(original.args[0], int):
-            return original.args[0]
+        """从 SQLAlchemy OperationalError 中提取数据库错误码"""
+        orig = getattr(e, "orig", None)
+        if orig and orig.args and isinstance(orig.args[0], int):
+            return orig.args[0]
         return None
 
     async def _execute_explain(self, sql: str) -> ExecuteExplainResult:
         """执行 EXPLAIN，系统级错误向上抛出，SQL 级错误包装为 error 返回"""
         try:
-            conn = self.db.get_connection()
-            _, rows = await conn.execute_query(f"EXPLAIN {sql}")
+            rows = await self.db.execute_query(f"EXPLAIN {sql}")
             explains = [
                 Explain.model_validate({k.lower(): v for k, v in row.items() if v is not None})
                 for row in rows

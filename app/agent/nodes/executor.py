@@ -15,9 +15,7 @@ class Executor:
         self.db = business_db
 
     async def _execute_sql(self, sql: str) -> List[Dict[str, Any]]:
-        conn = self.db.get_connection()
-        _, rows = await conn.execute_query(sql)
-        return [dict(row) for row in rows]
+        return await self.db.execute_query(sql)
 
     async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
         if not state.sql_result or not state.sql_result.sql:

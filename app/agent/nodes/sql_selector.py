@@ -52,9 +52,7 @@ class SQLSelector:
         """注入确定性排序和 LIMIT 后执行单条 SQL 获取样本结果，失败返回 None"""
         limited_sql = self._ensure_deterministic_sample(sql, self._COMPARE_LIMIT)
         try:
-            conn = self.db.get_connection()
-            _, rows = await conn.execute_query(limited_sql)
-            return [dict(row) for row in rows]
+            return await self.db.execute_query(limited_sql)
         except Exception as e:
             logger.warning("sql_selector.comparison_execution_failed", error=str(e))
             return None
