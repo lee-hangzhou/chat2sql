@@ -8,7 +8,7 @@ from app.agent.states import NL2SQLState
 from app.core.database import business_db
 from app.core.logger import logger
 from app.schemas.agent import (
-    AgentErrorCode, CandidateExecResult, Explain, SQLResult, ValidatedCandidate,
+    AgentErrorCode, CandidateExecResult, SQLResult, ValidatedCandidate,
 )
 from app.utils.timing import log_elapsed
 
@@ -20,12 +20,12 @@ class SQLSelector:
 
     def __init__(self):
         self.db = business_db
+        self.dialect = business_db.dialect
 
-    @staticmethod
-    def _ensure_deterministic_sample(sql: str, limit: int) -> str:
+    def _ensure_deterministic_sample(self, sql: str, limit: int) -> str:
         """为 SQL 注入确定性 ORDER BY 并添加/收紧 LIMIT，确保样本可比"""
         try:
-            tree = sqlglot.parse_one(sql, dialect="mysql")
+            tree = sqlglot.parse_one(sql, dialect=self.dialect.sqlglot_dialect)
 
             if not tree.args.get("order"):
                 select_exprs = tree.args.get("expressions", [])
@@ -41,9 +41,9 @@ class SQLSelector:
             if existing_limit:
                 existing_val = int(existing_limit.expression.this)
                 if existing_val <= limit:
-                    return tree.sql(dialect="mysql")
+                    return tree.sql(dialect=self.dialect.sqlglot_dialect)
             tree.set("limit", exp.Limit(expression=exp.Literal.number(limit)))
-            return tree.sql(dialect="mysql")
+            return tree.sql(dialect=self.dialect.sqlglot_dialect)
         except Exception as e:
             logger.warning("sql_selector.ensure_deterministic_sample_failed", sql=sql, error=str(e))
             return sql
@@ -71,11 +71,6 @@ class SQLSelector:
 
         return normalize(a) == normalize(b)
 
-    @staticmethod
-    def _explain_cost(explains: List[Explain]) -> int:
-        """EXPLAIN 预估总扫描行数，作为开销度量"""
-        return sum(e.rows for e in explains)
-
     async def _execute_candidates(
         self, candidates: List[ValidatedCandidate],
     ) -> List[CandidateExecResult]:
@@ -85,7 +80,7 @@ class SQLSelector:
         return [
             CandidateExecResult(
                 sql=candidates[i].sql,
-                explains=candidates[i].explains,
+                explain=candidates[i].explain,
                 exec_result=results[i],
             )
             for i in range(len(candidates))
@@ -110,7 +105,7 @@ class SQLSelector:
             return None
 
         group_entries = [entries[i] for i in majority]
-        return min(group_entries, key=lambda e: self._explain_cost(e.explains))
+        return min(group_entries, key=lambda e: e.explain.cost)
 
     def _select_winner(
         self,
@@ -164,7 +159,7 @@ class SQLSelector:
         if not all_results:
             logger.warning("sql_selector.all_execution_failed")
             if new_candidates:
-                winner = min(new_candidates, key=lambda c: self._explain_cost(c.explains))
+                winner = min(new_candidates, key=lambda c: c.explain.cost)
                 return {"sql_result": SQLResult(sql=winner.sql)}
             return {
                 "is_success": False,

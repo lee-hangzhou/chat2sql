@@ -33,10 +33,10 @@ INTENT_RECOGNITION_HUMAN_PROMPT = """
 
 
 GENERATE_SQL_SYSTEM_PROMPT = """
-你是 MySQL SQL 生成器
+你是 {dialect_name} SQL 生成器
 
 ## 任务
-根据对话历史和表结构，生成 MySQL SELECT 语句
+根据对话历史和表结构，生成 {dialect_name} SELECT 语句
 
 ## 规则
 - 仅生成 SELECT 语句，禁止任何写操作

@@ -7,6 +7,7 @@ from sqlalchemy.schema import CreateTable
 from tortoise import Tortoise
 
 from app.core.config import settings
+from app.core.dialect import DialectStrategy, detect_dialect
 from app.core.logger import logger
 from app.core.singleton import Singleton
 
@@ -96,12 +97,20 @@ class BusinessDatabase(Singleton):
 
     def __init__(self) -> None:
         self._engine: Optional[AsyncEngine] = None
+        self._dialect: Optional[DialectStrategy] = None
+
+    @property
+    def dialect(self) -> DialectStrategy:
+        if self._dialect is None:
+            raise RuntimeError("Business database not connected")
+        return self._dialect
 
     async def connect(self) -> None:
         if self._engine is not None:
             return
 
         url = settings.BUSINESS_DATABASE_URL
+        self._dialect = detect_dialect(url)
         self._engine = create_async_engine(
             url,
             pool_size=self._POOL_SIZE,
@@ -109,13 +118,14 @@ class BusinessDatabase(Singleton):
             pool_recycle=self._POOL_RECYCLE,
             pool_timeout=self._POOL_TIMEOUT,
         )
-        logger.info("Business database connected")
+        logger.info("Business database connected", dialect=self._dialect.name)
 
     async def disconnect(self) -> None:
         if self._engine is None:
             return
         await self._engine.dispose()
         self._engine = None
+        self._dialect = None
         logger.info("Business database disconnected")
 
     async def execute_query(self, sql: str) -> List[Dict[str, Any]]:

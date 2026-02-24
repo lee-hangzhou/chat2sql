@@ -34,11 +34,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(default="sqlite://./smart_chat.db")
 
     # Business database for NL2SQL query validation (optional)
-    BUSINESS_DATABASE_URL: str = Field(description="业务数据库异步连接地址")
+    BUSINESS_DATABASE_URL: str = Field(description="业务数据库异步连接地址，支持 mysql+aiomysql / postgresql+psycopg / clickhouse+asynch")
     EXPLAIN_MAX_ROWS: int = Field(default=10000, description="EXPLAIN 预估扫描行数阈值，超过则标记为性能问题")
     EXECUTOR_MAX_ROWS: int = Field(default=1000, description="执行结果最大返回行数，超出部分截断")
     AGENT_MAX_RETRIES: int = Field(default=3, description="SQL 校验失败最大重试次数")
-    AGENT_MAX_SCHEMA_RETRIES: int = Field(default=3, description="Schema 检索最大次数（含首次）")
+    AGENT_MAX_SCHEMA_RETRIES: int = Field(default=3, description="Schema 检索最大次数")
     AGENT_MAX_FOLLOW_UPS: int = Field(default=3, description="最大追问次数")
 
     # Checkpointer
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     AGENT_RECURSION_LIMIT: int = Field(default=25, description="LangGraph 单次调用最大节点执行次数")
     AGENT_MAX_MESSAGE_PAIRS: int = Field(default=5, description="Prompt 中保留的最大消息轮数")
     SQL_CANDIDATE_COUNT: int = Field(default=2, description="SQL 候选生成数量")
-    SQL_CANDIDATE_TEMPERATURE: float = Field(default=0.7, description="SQL 候选生成温度（需 > 0 以产生多样性）")
+    SQL_CANDIDATE_TEMPERATURE: float = Field(default=0.7, description="SQL 候选生成温度")
 
     # Milvus
     MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")

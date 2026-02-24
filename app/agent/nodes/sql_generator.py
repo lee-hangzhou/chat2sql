@@ -6,6 +6,7 @@ from langchain_core.messages import BaseMessage
 from app.agent.prompts import ChatPrompt
 from app.agent.states import NL2SQLState
 from app.core.config import settings
+from app.core.database import business_db
 from app.core.llm import llm
 from app.core.logger import logger
 from app.schemas.agent import AgentErrorCode, SQLResult
@@ -16,6 +17,9 @@ from app.vars.prompts import VALIDATION_FEEDBACK_SECTION
 
 class SQLGenerator:
     """基于对话历史和 schema 并发生成多条候选 SQL"""
+
+    def __init__(self):
+        self.dialect = business_db.dialect
 
     @staticmethod
     def _build_validation_feedback(state: NL2SQLState) -> str:
@@ -40,16 +44,16 @@ class SQLGenerator:
             validation_feedback="\n".join(feedback_parts),
         )
 
-    @staticmethod
-    def _build_prompt(state: NL2SQLState) -> List[BaseMessage]:
+    def _build_prompt(self, state: NL2SQLState) -> List[BaseMessage]:
         """组装完整的 SQL 生成 prompt：schema + 对话历史 + 校验反馈"""
         schemas = "\n\n".join(state.schemas)
         trimmed = trim_messages(state.messages)
-        feedback = SQLGenerator._build_validation_feedback(state)
+        feedback = self._build_validation_feedback(state)
         return ChatPrompt.generate_sql_prompt(
             messages=trimmed,
             schemas=schemas,
             validation_feedback_section=feedback,
+            dialect_name=self.dialect.name,
         )
 
     @staticmethod
