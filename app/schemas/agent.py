@@ -23,6 +23,19 @@ class ChartType(str, Enum):
     NONE = "none"
 
 
+class OrchestratorIntent(str, Enum):
+    """Orchestrator 主图的意图分类"""
+    QUERY = "query"
+    INSIGHT = "insight"
+    CHART_UPDATE = "chart_update"
+    CHAT = "chat"
+
+
+class OrchestratorIntentResult(BaseModel):
+    """LLM 意图分类输出"""
+    intent: OrchestratorIntent = Field(description="用户意图分类")
+
+
 class AgentErrorCode(str, Enum):
     """Agent 错误码"""
 

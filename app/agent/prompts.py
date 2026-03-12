@@ -8,6 +8,8 @@ from app.vars.prompts import (
     INTENT_RECOGNITION_HUMAN_PROMPT,
     GENERATE_SQL_SYSTEM_PROMPT,
     GENERATE_SQL_HUMAN_PROMPT,
+    ORCHESTRATOR_SYSTEM_PROMPT,
+    ORCHESTRATOR_HUMAN_PROMPT,
     RESULT_SUMMARY_SYSTEM_PROMPT,
     RESULT_SUMMARY_HUMAN_PROMPT,
     SQL_JUDGE_SYSTEM_PROMPT,
@@ -62,5 +64,14 @@ class ChatPrompt:
         template = ChatPromptTemplate.from_messages([
             (SYSTEM_TYPE, CHART_ADVISOR_SYSTEM_PROMPT),
             (HUMAN_TYPE, CHART_ADVISOR_HUMAN_PROMPT),
+        ])
+        return template.format_messages(**kwargs)
+
+    @classmethod
+    def orchestrator_prompt(cls, **kwargs) -> List[BaseMessage]:
+        template = ChatPromptTemplate.from_messages([
+            (SYSTEM_TYPE, ORCHESTRATOR_SYSTEM_PROMPT),
+            MessagesPlaceholder(variable_name="messages"),
+            (HUMAN_TYPE, ORCHESTRATOR_HUMAN_PROMPT),
         ])
         return template.format_messages(**kwargs)

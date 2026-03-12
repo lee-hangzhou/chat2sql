@@ -117,3 +117,39 @@ export interface SSEError {
   error_code?: string | null
   error_message?: string | null
 }
+
+/* ---- Agent Response ---- */
+
+export type ResponseType = 'query' | 'insight' | 'chart_update' | 'chat'
+
+export interface InsightFinding {
+  conclusion: string
+  severity: 'high' | 'medium' | 'low'
+  chart_suggestion: string | null
+  data_slice: Record<string, any>
+}
+
+export interface InsightReport {
+  summary: string
+  findings: InsightFinding[]
+}
+
+export interface AgentResponse {
+  text: string
+  charts: Record<string, any>[]
+  insight_report: InsightReport | null
+  response_type: ResponseType
+}
+
+/* ---- Canvas State ---- */
+
+export interface CanvasState {
+  responseType: ResponseType | null
+  chartOption: Record<string, any> | null
+  tableData: Record<string, any>[] | null
+  tableColumns: string[]
+  summaryText: string
+  insightReport: InsightReport | null
+  queryTitle: string
+  isLoading: boolean
+}

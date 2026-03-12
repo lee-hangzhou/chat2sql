@@ -1,0 +1,162 @@
+# NL2SQL Agent 架构重构规范
+# 目标：在现有单图架构基础上，引入 Orchestrator + 多子图模式，新增 Insight Workflow
+
+## 项目背景
+本项目是一个基于 LangGraph 的 NL2SQL 智能体，FastAPI 后端，支持 SQL 查询、图表推荐、多轮对话。
+当前正在进行架构升级，引入 Orchestrator 路由多个子图（Query、Chart、Insight），
+并新增 Insight Workflow 实现数据洞察分析。
+
+---
+
+## 核心架构约束
+
+### 1. State 层规范
+- **所有 State 类必须继承 Pydantic `BaseModel`，不用 TypedDict**
+- 子图 State 独立定义，只暴露结果字段给 OrchestratorState，不共享过程字段
+- 新增字段必须有 `Field(default=..., description="...")` 注释
+- 使用 `Annotated` + 自定义 merge 函数处理 list 类型的累积字段
+
+```python
+# 正确示例
+class InsightState(BaseModel):
+    query_output: Optional[List[Dict[str, Any]]] = Field(default=None, description="...")
+    findings: List[InsightFinding] = Field(default_factory=list, description="...")
+
+# 错误示例 - 禁止
+class InsightState(TypedDict):
+    findings: list
+```
+
+### 2. Node 层规范
+- **所有节点必须实现为 class，包含 `async def __call__(self, state: XxxState) -> Dict[str, Any]`**
+- `__call__` 只返回需要更新的字段，不返回完整 state
+- 构造函数 `__init__` 中完成依赖注入（db、llm、dialect 等），不在 `__call__` 中初始化
+- 使用 `app.core.logger` 的结构化日志，格式 `logger.info("node_name.event", key=value)`
+- 使用 `app.utils.timing.log_elapsed` 记录耗时
+- LLM 调用统一通过 `app.core.llm.llm`，温度等参数通过 `.bind()` 覆盖
+
+```python
+# 正确示例
+class InsightPlanner:
+    def __init__(self):
+        self.dialect = business_db.dialect
+
+    async def __call__(self, state: InsightState) -> Dict[str, Any]:
+        async with log_elapsed(logger, "insight_planner.completed") as ctx:
+            ...
+        return {"analysis_plan": plan}
+```
+
+### 3. Graph 层规范
+- 节点名称定义为模块级常量字符串（全大写）
+- 路由函数命名：`route_after_<node_name>`，接收 state 返回节点名字符串或 END
+- 路由函数开头先检查 `state.is_success is False`，快速失败
+- 子图通过 `graph.compile()` 生成，由 Orchestrator 通过 `add_node(NAME, subgraph)` 挂载
+- Orchestrator 路由逻辑用代码判断，**不用 LLM tool call 路由**
+
+### 4. 目录结构规范
+新增文件的放置位置：
+```
+app/agent/
+├── graph.py                    # 主图（OrchestratorGraph）- 重构此文件
+├── states.py                   # 所有 State 定义 - 新增子图 State
+├── nodes/                      # 现有节点（保持不变）
+│   └── orchestrator.py         # 新增：Orchestrator 节点
+├── subgraphs/                  # 现有空目录 - 在此新增
+│   ├── __init__.py
+│   ├── query_graph.py          # 从 graph.py 抽取的 Query 子图
+│   ├── chart_graph.py          # Chart 子图
+│   └── insight_graph.py        # 新增 Insight 子图
+└── nodes/
+    ├── insight/                # 新增 Insight 节点目录
+    │   ├── __init__.py
+    │   ├── insight_planner.py
+    │   ├── data_fetcher.py
+    │   ├── anomaly_detector.py
+    │   ├── hypothesis_generator.py
+    │   └── insight_summarizer.py
+```
+
+### 5. Prompt 规范
+- Prompt 模板定义在 `app/agent/prompts.py` 的 `ChatPrompt` 类中，作为 `@staticmethod`
+- 变量部分用 `app/vars/prompts.py` 存放可复用片段
+- 不在节点内 hardcode 长 prompt 字符串
+
+### 6. 错误处理规范
+- 节点失败统一返回：
+```python
+return {
+    "is_success": False,
+    "error_code": AgentErrorCode.XXX,
+    "error_message": AgentErrorCode.XXX.message,
+}
+```
+- 路由函数首行检查 `if state.is_success is False: return END`
+- 不在节点内 raise exception（除非是不可恢复的系统错误）
+
+### 7. 异步规范
+- 所有节点 `__call__` 必须是 `async def`
+- 并发任务使用 `asyncio.gather()`
+- 数据库查询使用 `app.core.database.business_db` 的异步接口
+
+---
+
+## 架构设计：三层意图路由
+
+```
+用户输入
+  └─→ OrchestratorState (轻量，只含路由结果和最终输出)
+        ├─→ [is_presentation_change] → Chart Subgraph (跳过 SQL，复用缓存数据)
+        ├─→ [is_query_intent] → Query Subgraph → Chart Subgraph (可选)
+        │                    → Insight Subgraph (自动触发或用户请求)
+        ├─→ [is_insight_request] → Insight Subgraph (直接，复用已有数据)
+        └─→ [else] → Chat Tool (直接 LLM 回答)
+```
+
+## OrchestratorState 设计原则
+- 只保留：`messages`、`current_intent`、`cached_query_result`（跨轮复用）、`final_response`
+- 子图结果通过专用字段回传：`query_output`、`chart_option`、`insight_report`
+- 子图内部的过程字段（`sql_candidates`、`validated_candidates` 等）不出现在 OrchestratorState
+
+---
+
+## Insight Workflow 设计
+
+节点顺序：InsightPlanner → DataFetcher → AnomalyDetector → HypothesisGenerator → InsightSummarizer
+
+- **InsightPlanner**：基于 `query_output` + 用户问题，制定分析维度列表
+- **DataFetcher**：判断是否需要补充查询，需要时调用 Query Subgraph
+- **AnomalyDetector**：模式识别，输出异常点列表
+- **HypothesisGenerator**：生成假设并验证，可回环到 DataFetcher（唯一的动态循环节点）
+- **InsightSummarizer**：整合所有 findings，生成最终报告 + 建议图表列表
+
+每条 finding 结构：
+```python
+class InsightFinding(BaseModel):
+    conclusion: str
+    data_slice: Dict[str, Any]       # 支撑数据切片
+    chart_suggestion: Optional[str]  # 建议图表类型
+    severity: str                    # "high" / "medium" / "low"
+```
+
+---
+
+## ResponseAssembler 输出格式
+所有路径最终汇聚到统一格式：
+```python
+class AgentResponse(BaseModel):
+    text: str
+    charts: List[Dict[str, Any]] = []       # ECharts option list
+    insight_report: Optional[InsightReport] = None
+    response_type: Literal["query", "insight", "chat", "chart_update"]
+```
+
+---
+
+## 禁止事项
+- ❌ 禁止在 OrchestratorState 中堆积子图的过程字段
+- ❌ 禁止用 LLM tool call 做 Orchestrator 路由（用代码路由）
+- ❌ 禁止修改现有节点的 `__call__` 签名（可扩展，不破坏）
+- ❌ 禁止在节点内直接 import 其他节点（通过 graph 编排）
+- ❌ 禁止使用 TypedDict 定义 State
+- ❌ 禁止在 `__call__` 返回完整 state（只返回 diff 字段）

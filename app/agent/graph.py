@@ -1,106 +1,180 @@
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from typing import Any, Dict
 
-from langmem.short_term import SummarizationNode
+from langchain_core.messages import AIMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph.state import CompiledStateGraph
 
-from app.agent.nodes.chart_advisor import ChartAdvisor
-from app.agent.nodes.executor import Executor
-from app.agent.nodes.follow_up import FollowUp
-from app.agent.nodes.intent_parse import IntentParse
-from app.agent.nodes.result_summarizer import ResultSummarizer
-from app.agent.nodes.schema_retriever import SchemaRetriever
-from app.agent.nodes.sql_generator import SQLGenerator
-from app.agent.nodes.sql_judge import SQLJudge
-from app.agent.nodes.sql_selector import SQLSelector
-from app.agent.nodes.sql_validator import SQLValidator
-from app.agent.states import NL2SQLState
+from app.agent.nodes.orchestrator import Orchestrator
+from app.agent.states import InsightState, OrchestratorState
+from app.schemas.agent import OrchestratorIntent
+from app.agent.subgraphs.chart_graph import ChartState, build_chart_graph
+from app.agent.subgraphs.insight_graph import build_insight_graph
+from app.agent.subgraphs.query_graph import build_query_graph
 from app.core.config import CheckpointerType, settings
 from app.core.llm import llm
+from app.core.logger import logger
+from app.vars.vars import HUMAN_TYPE
 
-SUMMARIZE = "summarize"
-SCHEMA_RETRIEVER = "schema_retriever"
-INTENT_PARSE = "intent_parse"
-FOLLOW_UP = "follow_up"
-SQL_GENERATOR = "sql_generator"
-SQL_VALIDATOR = "sql_validator"
-SQL_SELECTOR = "sql_selector"
-SQL_JUDGE = "sql_judge"
-EXECUTOR = "executor"
-CHART_ADVISOR = "chart_advisor"
-RESULT_SUMMARIZER = "result_summarizer"
+ORCHESTRATOR = "orchestrator"
+QUERY_SUBGRAPH = "query_subgraph"
+INSIGHT_SUBGRAPH = "insight_subgraph"
+CHART_SUBGRAPH = "chart_subgraph"
+CHAT = "chat"
 
 
-def route_after_intent_parse(state: NL2SQLState) -> str:
-    """展示变更 → CHART_ADVISOR，非查询 → END，追问 → FOLLOW_UP，查询意图 → SCHEMA_RETRIEVER"""
+def route_after_orchestrator(state: OrchestratorState) -> str:
     if state.is_success is False:
         return END
-    result = state.intent_parse_result
-    if result.is_presentation_change:
-        return CHART_ADVISOR
-    if not result.is_query_intent:
-        return END
-    if result.need_follow_up:
-        return FOLLOW_UP
-    return SCHEMA_RETRIEVER
+    intent = state.current_intent
+    has_data = bool(state.cached_query_result)
+    if intent == OrchestratorIntent.QUERY:
+        return QUERY_SUBGRAPH
+    if intent == OrchestratorIntent.INSIGHT:
+        return INSIGHT_SUBGRAPH if has_data else QUERY_SUBGRAPH
+    if intent == OrchestratorIntent.CHART_UPDATE:
+        return CHART_SUBGRAPH if has_data else QUERY_SUBGRAPH
+    return CHAT
 
 
-def route_after_schema_retriever(state: NL2SQLState) -> str:
-    if state.is_success is False:
-        return END
-    return SQL_GENERATOR
+def _last_user_message(messages) -> str:
+    for msg in reversed(messages):
+        if msg.type == HUMAN_TYPE:
+            return str(msg.content)
+    return ""
 
 
-def route_after_follow_up(state: NL2SQLState) -> str:
-    if state.is_success is False:
-        return END
-    return SUMMARIZE
+def _make_query_node(query_graph: CompiledStateGraph):
+    async def _run(state: OrchestratorState, config: RunnableConfig) -> Dict[str, Any]:
+        logger.info("query_subgraph.start")
+        result = await query_graph.ainvoke({"messages": state.messages}, config)
+
+        # 提取子图新增的消息（排除传入的原始消息）
+        all_messages = result.get("messages", [])
+        new_messages = all_messages[len(state.messages):]
+
+        # 最后一条 AI 消息作为 final_response
+        final_response = None
+        for msg in reversed(new_messages):
+            if hasattr(msg, "type") and msg.type == "ai":
+                final_response = str(msg.content)
+                break
+
+        out: Dict[str, Any] = {
+            "is_success": result.get("is_success"),
+            "error_code": result.get("error_code"),
+            "error_message": result.get("error_message"),
+        }
+        if new_messages:
+            out["messages"] = new_messages
+        if final_response is not None:
+            out["final_response"] = final_response
+        if result.get("execute_result"):
+            out["query_output"] = result["execute_result"]
+            out["cached_query_result"] = result["execute_result"]
+        if result.get("chart_option"):
+            out["chart_option"] = result["chart_option"]
+
+        logger.info(
+            "query_subgraph.completed",
+            is_success=out.get("is_success"),
+            has_chart=out.get("chart_option") is not None,
+        )
+        return out
+
+    return _run
 
 
-def route_after_sql_generator(state: NL2SQLState) -> str:
-    if state.is_success is False:
-        return END
-    return SQL_VALIDATOR
+def _make_insight_node(insight_graph: CompiledStateGraph):
+    async def _run(state: OrchestratorState, config: RunnableConfig) -> Dict[str, Any]:
+        logger.info("insight_subgraph.start")
+        data = state.cached_query_result or state.query_output or []
+        user_question = _last_user_message(state.messages)
+
+        result = await insight_graph.ainvoke(
+            InsightState(query_output=data, user_question=user_question).model_dump(),
+            config,
+        )
+
+        insight_summary = result.get("insight_summary") or ""
+        findings = result.get("findings", [])
+        insight_report: Dict[str, Any] = {
+            "summary": insight_summary,
+            "findings": [f.model_dump() if hasattr(f, "model_dump") else f for f in findings],
+        }
+
+        out: Dict[str, Any] = {
+            "insight_report": insight_report,
+            "final_response": insight_summary,
+            "is_success": result.get("is_success"),
+            "error_code": result.get("error_code"),
+            "error_message": result.get("error_message"),
+        }
+        if insight_summary:
+            out["messages"] = [AIMessage(content=insight_summary)]
+
+        logger.info("insight_subgraph.completed", findings_count=len(findings))
+        return out
+
+    return _run
 
 
-def route_after_validate(state: NL2SQLState) -> str:
-    """校验后路由：有合法候选 → 选优；仲裁候选失败但有历史结果 → 裁决；否则重试"""
-    if state.is_success is False:
-        return END
-    if state.validated_candidates:
-        return SQL_SELECTOR
-    if state.candidate_exec_results:
-        return SQL_JUDGE
-    if state.retry_count >= settings.AGENT_MAX_RETRIES:
-        return END
-    if state.syntax_result and not state.syntax_result.is_ok:
-        return SQL_GENERATOR
-    if state.explain_error:
-        return SCHEMA_RETRIEVER
-    return END
+def _make_chart_node(chart_graph: CompiledStateGraph):
+    async def _run(state: OrchestratorState, config: RunnableConfig) -> Dict[str, Any]:
+        logger.info("chart_subgraph.start")
+        data = state.cached_query_result or state.query_output or []
+        user_question = _last_user_message(state.messages)
+
+        result = await chart_graph.ainvoke(
+            ChartState(execute_result=data, user_question=user_question).model_dump(),
+            config,
+        )
+
+        chart_option = result.get("chart_option")
+        chart_message = result.get("chart_message")
+
+        reply = chart_message or ("图表已更新" if chart_option else "当前数据暂不适合图表展示")
+        out: Dict[str, Any] = {
+            "final_response": reply,
+            "is_success": True,
+            "messages": [AIMessage(
+                content=reply,
+                additional_kwargs={"chart_option": chart_option} if chart_option else {},
+            )],
+        }
+        if chart_option:
+            out["chart_option"] = chart_option
+
+        logger.info("chart_subgraph.completed", has_chart=chart_option is not None)
+        return out
+
+    return _run
 
 
-def route_after_selector(state: NL2SQLState) -> str:
-    """选优后路由：仲裁 → 生成；有结果 → 执行；无结果 → 裁决"""
-    if state.needs_arbitration:
-        return SQL_GENERATOR
-    if state.sql_result:
-        return EXECUTOR
-    return SQL_JUDGE
+async def _chat_node(state: OrchestratorState) -> Dict[str, Any]:
+    """直接调用 LLM 进行自然语言对话"""
+    logger.info("chat_node.start")
+    chat_llm = llm.with_retry(
+        stop_after_attempt=settings.LLM_RETRY_ATTEMPTS,
+        wait_exponential_jitter=True,
+    )
+    try:
+        response = await chat_llm.ainvoke(state.messages)
+        reply = response.content.strip()
+    except Exception as e:
+        logger.warning("chat_node.llm_failed", error=str(e))
+        reply = "抱歉，我暂时无法响应，请稍后再试。"
 
-
-def route_after_judge(state: NL2SQLState) -> str:
-    if state.is_success is False:
-        return END
-    return EXECUTOR
-
-
-def route_after_executor(state: NL2SQLState) -> str:
-    if state.is_success is False:
-        return END
-    return CHART_ADVISOR
+    logger.info("chat_node.completed")
+    return {
+        "final_response": reply,
+        "is_success": True,
+        "messages": [AIMessage(content=reply)],
+    }
 
 
 @asynccontextmanager
@@ -124,39 +198,25 @@ async def create_checkpointer() -> AsyncGenerator[BaseCheckpointSaver, None]:
     yield MemorySaver()
 
 
-def build_graph(checkpointer: BaseCheckpointSaver):
-    """构建 NL2SQL graph，checkpointer 由调用方注入"""
-    graph = StateGraph(NL2SQLState)
+def build_graph(checkpointer: BaseCheckpointSaver) -> CompiledStateGraph:
+    """构建 Orchestrator 主图，checkpointer 由调用方注入"""
+    query_graph = build_query_graph()
+    insight_graph = build_insight_graph()
+    chart_graph = build_chart_graph()
 
-    summarization_node = SummarizationNode(
-        model=llm.bind(max_tokens=settings.SUMMARIZATION_MAX_SUMMARY_TOKENS),
-        max_tokens=settings.SUMMARIZATION_MAX_TOKENS,
-        max_summary_tokens=settings.SUMMARIZATION_MAX_SUMMARY_TOKENS,
-    )
+    graph = StateGraph(OrchestratorState)
 
-    graph.add_node(SUMMARIZE, summarization_node)
-    graph.add_node(SCHEMA_RETRIEVER, SchemaRetriever())
-    graph.add_node(INTENT_PARSE, IntentParse())
-    graph.add_node(FOLLOW_UP, FollowUp())
-    graph.add_node(SQL_GENERATOR, SQLGenerator())
-    graph.add_node(SQL_VALIDATOR, SQLValidator())
-    graph.add_node(SQL_SELECTOR, SQLSelector())
-    graph.add_node(SQL_JUDGE, SQLJudge())
-    graph.add_node(EXECUTOR, Executor())
-    graph.add_node(CHART_ADVISOR, ChartAdvisor())
-    graph.add_node(RESULT_SUMMARIZER, ResultSummarizer())
+    graph.add_node(ORCHESTRATOR, Orchestrator())
+    graph.add_node(QUERY_SUBGRAPH, _make_query_node(query_graph))
+    graph.add_node(INSIGHT_SUBGRAPH, _make_insight_node(insight_graph))
+    graph.add_node(CHART_SUBGRAPH, _make_chart_node(chart_graph))
+    graph.add_node(CHAT, _chat_node)
 
-    graph.add_edge(START, SUMMARIZE)
-    graph.add_edge(SUMMARIZE, INTENT_PARSE)
-    graph.add_conditional_edges(INTENT_PARSE, route_after_intent_parse)
-    graph.add_conditional_edges(SCHEMA_RETRIEVER, route_after_schema_retriever)
-    graph.add_conditional_edges(FOLLOW_UP, route_after_follow_up)
-    graph.add_conditional_edges(SQL_GENERATOR, route_after_sql_generator)
-    graph.add_conditional_edges(SQL_VALIDATOR, route_after_validate)
-    graph.add_conditional_edges(SQL_SELECTOR, route_after_selector)
-    graph.add_conditional_edges(SQL_JUDGE, route_after_judge)
-    graph.add_conditional_edges(EXECUTOR, route_after_executor)
-    graph.add_edge(CHART_ADVISOR, RESULT_SUMMARIZER)
-    graph.add_edge(RESULT_SUMMARIZER, END)
+    graph.add_edge(START, ORCHESTRATOR)
+    graph.add_conditional_edges(ORCHESTRATOR, route_after_orchestrator)
+    graph.add_edge(QUERY_SUBGRAPH, END)
+    graph.add_edge(INSIGHT_SUBGRAPH, END)
+    graph.add_edge(CHART_SUBGRAPH, END)
+    graph.add_edge(CHAT, END)
 
     return graph.compile(checkpointer=checkpointer)

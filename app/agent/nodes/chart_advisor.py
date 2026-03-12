@@ -1,11 +1,10 @@
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 import sqlglot
 from sqlglot import exp
 
 from app.agent.prompts import ChatPrompt
-from app.agent.states import NL2SQLState
 from app.core.config import settings
 from app.core.database import business_db
 from app.core.llm import llm
@@ -14,6 +13,12 @@ from app.schemas.agent import ChartAdvice, ChartType
 from app.utils import chart_builder
 from app.utils.timing import log_elapsed
 from app.vars.prompts import CHART_USER_PREFERENCE_SECTION, CHART_USER_WANTS_SECTION
+
+
+@runtime_checkable
+class ChartAdvisorState(Protocol):
+    """ChartAdvisor 所需的最小 state 协议，NL2SQLState 与 ChartState 均满足"""
+    execute_result: Optional[List[Dict[str, Any]]]
 
 _SAMPLE_MAX_ROWS = 3
 _UNKNOWN_TYPE = "unknown"
@@ -39,11 +44,15 @@ class ChartAdvisor:
         )
         self.dialect = business_db.dialect
 
-    async def __call__(self, state: NL2SQLState) -> Dict[str, Any]:
+    async def __call__(self, state: ChartAdvisorState) -> Dict[str, Any]:
         rows = state.execute_result or []
-        sql = state.sql_result.sql if state.sql_result else ""
-        intent = state.intent_parse_result
+        sql_result = getattr(state, "sql_result", None)
+        sql = sql_result.sql if sql_result else ""
+        intent = getattr(state, "intent_parse_result", None)
         user_wants = intent.wants_chart if intent else None
+        # insight 模式视为用户明确需要图表
+        if getattr(state, "chart_mode", "normal") == "insight":
+            user_wants = True
 
         skip_reason = self._pre_filter(rows, sql, user_wants)
         if skip_reason:
@@ -139,8 +148,14 @@ class ChartAdvisor:
         return False
 
     @staticmethod
-    def _extract_question(state: NL2SQLState) -> str:
-        for msg in reversed(state.summarized_messages or state.messages):
+    def _extract_question(state: ChartAdvisorState) -> str:
+        # ChartState 直接提供 user_question
+        user_question = getattr(state, "user_question", None)
+        if user_question:
+            return user_question
+        # NL2SQLState 从消息历史中提取
+        messages = getattr(state, "summarized_messages", None) or getattr(state, "messages", [])
+        for msg in reversed(messages):
             if msg.type == "human":
                 return msg.content
         return ""
