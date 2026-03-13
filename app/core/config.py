@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     # Milvus
     MILVUS_URI: str = Field(default="http://localhost:19530", description="Milvus 连接地址")
     MILVUS_COLLECTION_NAME: str = Field(default="table_schemas", description="Milvus 集合名称")
-    MILVUS_SEARCH_LIMIT: int = Field(default=10, description="Milvus 向量检索返回的最大表结构数量")
+    MILVUS_SEARCH_LIMIT: int = Field(default=5, description="Milvus 向量检索返回的最大表结构数量")
     EMBEDDING_MODEL: str = Field(default="BAAI/bge-large-zh-v1.5")
 
     # 消息摘要

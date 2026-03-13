@@ -29,7 +29,6 @@ class VectorStoreManager(Singleton):
                 embedding_function=self.embeddings,
                 connection_args={"uri": settings.MILVUS_URI},
                 collection_name=settings.MILVUS_COLLECTION_NAME,
-                auto_id=True,
             )
         return self._vector_store
 
